@@ -3,3 +3,7 @@ Things to do
 - getting the rsp/r200m vs M200m for varying cosmology using the darkemu.
 - putting the likelihood to get the cosmlogical parameter given the ESD as well as the rsp measurements.
 
+- M200m --> acrretion rate|cosmo para --> rsp
+- P(ESD,rsp|cosmo,hod); rsp = f(M200m)
+
+
