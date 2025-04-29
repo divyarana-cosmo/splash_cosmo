@@ -49,22 +49,27 @@ class splashsim():
 
     def logM200m2rsp(self, logmh, z):
         M = 10**logmh
-        rs = np.logspace(-1, 1, 100)
+        rs = np.logspace(-1, 1, 50)
         xihm = emu.get_xicross_mass(rs, M, z)
+
+        log_rs = np.log10(rs)
+        log_xihm = np.log10(xihm)
+
+        yy = (log_xihm[1:] - log_xihm[:-1])/(log_rs[1] - log_rs[0])
+        xx = log_rs[1:]*0.5 + log_rs[:-1]*0.5
+        from scipy.signal import savgol_filter
+        y_smooth = savgol_filter(yy, 5, 3)
+
+
         # Create a spline of log(xihm) vs log(rs)
-        spl = ius(np.log10(rs), np.log10(xihm),k=3)
-        # Create the derivative spline
-        spl_diff = spl.derivative(n=1)
-        # Sample points to evaluate the derivative
-        xx = rs[1:-1]
-        log_xx = np.log10(xx)
+        spl = ius(xx, y_smooth,k=3)
         # Evaluate the derivative at these points
-        deriv_values = spl_diff(log_xx)
+        deriv_values = spl(xx)
         # Find the index of the minimum derivative value
         min_idx = np.argmin(deriv_values)
-        print(10**log_xx[min_idx], deriv_values[min_idx])
+        print(10**xx[min_idx], deriv_values[min_idx])
 
-        res = minimize(spl_diff, x0=log_xx[min_idx], method='Nelder-Mead', tol=1e-6)
+        res = minimize(spl, x0=xx[min_idx], method='Nelder-Mead', tol=1e-6)
         return 10**res.x
 
 def plot_rsp_vs_peak_height_varying_omega():
@@ -75,13 +80,13 @@ def plot_rsp_vs_peak_height_varying_omega():
     h = 0.675  # Use h=0.675 as a baseline
 
     redshift = 0.0  # Fixed redshift
-    plt.subplot(2,2,1)
+    plt.subplot(3,3,1)
     for om in omega_m_values:
         # Initialize model with this omega_m and compatible parameters
         sim = splashsim(H0=100*h, Om0=om, Ob0=Ob0)
 
         # Range of halo masses
-        logm_values = np.linspace(12, 14.5, 20)
+        logm_values = np.linspace(12.5, 15.0, 5)
         nu_values = np.array([])
         rsp_r200m_values =np.array([])
         r200m_values =np.array([])
@@ -89,17 +94,22 @@ def plot_rsp_vs_peak_height_varying_omega():
         for logm in logm_values:
             rs = np.logspace(-1, 1, 100)
             xihm = emu.get_xicross_mass(rs, 10**logm, redshift)
-            ax = plt.subplot(2,2,1)
-            ax.plot(rs, xihm)
+            ax = plt.subplot(3,3,1)
+            ax.plot(rs, xihm,label=r'$\log M_{h} = %2.2f$'%logm)
 
-            ax1  = plt.subplot(2,2,2)
-            spl = ius(np.log10(rs), np.log10(xihm),k=3)
-            # Create the derivative spline
-            spl_diff = spl.derivative(n=1)
-            # Sample points to evaluate the derivative
-            xx = rs[1:-1]
-            log_xx = np.log10(xx)
-            ax1.plot(xx,spl_diff(log_xx))
+            ax1  = plt.subplot(3,3,2)
+            log_rs = np.log10(rs)
+            log_xihm = np.log10(xihm)
+
+            yy = (log_xihm[1:] - log_xihm[:-1])/(log_rs[1] - log_rs[0])
+            xx = log_rs[1:]*0.5 + log_rs[:-1]*0.5
+            from scipy.signal import savgol_filter
+            y_smooth = savgol_filter(yy, 5, 3)
+
+
+            # Create a spline of log(xihm) vs log(rs)
+            spl = ius(xx, y_smooth,k=3)
+            ax1.plot(10**xx,spl(xx))
             # Calculate peak height nu
             nu = sim.logM200m2nu(logm, redshift)
             nu_values=np.append(nu_values,nu)
@@ -120,12 +130,19 @@ def plot_rsp_vs_peak_height_varying_omega():
         # Plot for this omega_m
         #print(nu_values)
         #print(rsp_r200m_values)
-        ax2 = plt.subplot(2,2,3)
-        ax2.plot(nu_values, rsp_r200m_values, '-', label='x=sp')
-        ax2.plot(nu_values, r200m_values, '-', label='x=200m')
+        ax2 = plt.subplot(3,3,3)
+        ax2.plot(nu_values, rsp_r200m_values, '-', label='$x=sp$')
+        ax2.plot(nu_values, r200m_values, '-', label='$x=200m$')
 
-        ax3 = plt.subplot(2,2,4)
+        ax3 = plt.subplot(3,3,4)
         ax3.plot(nu_values, rsp_r200m_values/r200m_values, '-', label=f'$\Omega_m = {om}$')
+
+        ax4 = plt.subplot(3,3,5)
+        ax4.plot(logm_values, nu_values, '-', label=f'$\Omega_m = {om}$')
+
+        ax5 = plt.subplot(3,3,6)
+        ax5.plot(logm_values, rsp_r200m_values, '-', label='x=200m')
+
 
     ax.set_xscale('log')
     ax.set_yscale('log')
@@ -143,8 +160,15 @@ def plot_rsp_vs_peak_height_varying_omega():
     ax3.set_xlabel('$\\nu$')
     ax3.set_ylabel(r'$r_{sp}/r_{200m}$')
 
-    ax2.legend()   # for subplot (2,2,3)
-    ax3.legend()   # for subplot (2,2,4)
+    ax4.set_ylabel('$\\nu$')
+    ax4.set_xlabel(r'$\log M_{200m}$')
+
+    ax5.set_ylabel('$r_{sp}$')
+    ax5.set_xlabel(r'$\log M_{200m}$')
+
+    ax.legend(fontsize='xx-small')
+    ax2.legend()   # for subplot (3,3,3)
+    ax3.legend()   # for subplot (3,3,4)
 
     plt.tight_layout()
     plt.savefig('rsp_vs_nu_varying_omega.png', dpi=300)
