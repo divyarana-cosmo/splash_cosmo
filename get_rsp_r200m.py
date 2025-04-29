@@ -32,7 +32,8 @@ class splashsim():
     def M200m2r200m(self, logmh):
         m_tot = 10**logmh  # total mass of the halo
         rho_crt = 3*self.H0**2/(8*np.pi*self.G)  # rho critical
-        r_200m = (3*m_tot/(4*np.pi*200*rho_crt*self.Om0))**(1./3.)
+        #r_200m = (3*m_tot/(4*np.pi*200*rho_crt*self.Om0))**(1./3.)
+        r_200m = (3*m_tot/(4*np.pi*200*rho_crt*0.3))**(1./3.)
         return r_200m
 
     def _spl_M200m2nu(self, z):
