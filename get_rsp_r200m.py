@@ -49,7 +49,7 @@ class splashsim():
 
     def logM200m2rsp(self, logmh, z):
         M = 10**logmh
-        rs = np.logspace(-1, 1, 50)
+        rs = np.logspace(-1, 1, 100)
         xihm = emu.get_xicross_mass(rs, M, z)
 
         log_rs = np.log10(rs)
@@ -76,7 +76,7 @@ def plot_rsp_vs_peak_height_varying_omega():
     # Fixed baryon density within supported range
     Ob0 = 0.022  # Already in omega_b form (Ωbh²)
     #omega_m_values = [0.28, 0.29, 0.3, 0.31]
-    omega_m_values = [0.27]
+    omega_m_values = [0.3]
     h = 0.675  # Use h=0.675 as a baseline
 
     redshift = 0.0  # Fixed redshift
