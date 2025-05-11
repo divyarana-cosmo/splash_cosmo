@@ -20,7 +20,7 @@ class splashsim():
         - Other standard cosmological parameters
         """
         # Store the full Hubble constant and density parameters
-        self.H0 = H0
+        self.H0 = 100
         self.h = H0/100.0  # Dimensionless Hubble parameter
         self.Om0 = Om0     # Matter density parameter
 
@@ -68,7 +68,7 @@ class splashsim():
 
         # Calculate critical density in h^2 M_sun/(h^-1 Mpc)^3
         # ρ_crit = 3H²/(8πG) expressed in h^2 M_sun/(h^-1 Mpc)^3
-        rho_crit_h = 3*(self.H0/100.0)**2/(8*np.pi*self.G)  # in h^2 M_sun/(h^-1 Mpc)^3
+        rho_crit_h = 3*(self.H0)**2/(8*np.pi*self.G)  # in h^2 M_sun/(h^-1 Mpc)^3
 
         # Calculate mean density of the universe in h^2 M_sun/(h^-1 Mpc)^3
         # ρ_mean = Ωm * ρ_crit
@@ -78,7 +78,7 @@ class splashsim():
         # Since m_tot is in h^-1 M_sun, and we want r_200m in h^-1 Mpc:
         # M200m [h^-1 M_sun] = (4π/3) * 200 * ρ_mean [h^2 M_sun/(h^-1 Mpc)^3] * (r200m [h^-1 Mpc])^3 / h^2
         # Solving for r200m:
-        r_200m = (3*m_tot*self.h**2/(4*np.pi*200*rho_mean_h))**(1./3.)  # in h^-1 Mpc
+        r_200m = (3*m_tot/(4*np.pi*200*rho_mean_h))**(1./3.)  # in h^-1 Mpc
 
         return r_200m
 
@@ -107,7 +107,8 @@ class splashsim():
 
         # No need to convert units - dark_emulator already works with h^-1 M_sun
         self.delta_crit = 1.686
-        return self.delta_crit/self.spl_logMh2sigM(logmh)
+        #return self.delta_crit/self.spl_logMh2sigM(logmh)
+        return self.spl_logMh2sigM(logmh)
 
     def logM200m2rsp(self, logmh, z):
         """
@@ -183,7 +184,7 @@ def plot_rsp_vs_peak_height_varying_omega():
     our implementation with the Colossus package.
     """
     # COSMOLOGICAL PARAMETERS - CLEARLY DEFINED
-    h = 0.7        # Dimensionless Hubble parameter (H0/100)
+    h = 1.0        # Dimensionless Hubble parameter (H0/100)
     H0 = 100.0 * h   # Full Hubble constant in km/s/Mpc
 
     # Baryon density in ωb form (Ωb·h²)
@@ -224,7 +225,7 @@ def plot_rsp_vs_peak_height_varying_omega():
 
         params = {
             'flat': True,         # Assume flat universe
-            'H0': H0,             # Full Hubble constant
+            'H0': 100,             # Full Hubble constant
             'Om0': om,            # Matter density parameter
             'Ob0': Ob_true,       # Baryon density parameter (NOT in ωb form)
             'sigma8': 0.82,       # Power spectrum normalization
@@ -310,7 +311,8 @@ def plot_rsp_vs_peak_height_varying_omega():
 
         # Plot peak height calculations
         # Colossus expects masses in M_sun
-        nu_colossus = peaks.peakHeight(colossus_masses, z=redshift)
+        #nu_colossus = peaks.peakHeight(colossus_masses, z=redshift)
+        nu_colossus = cosmo.sigma(r200m_values, z=redshift)
         ax4.plot(logm_values, nu_values, '-o', label='Our calc')
         ax4.plot(logm_values, nu_colossus, '--s', label='colossus')
 
