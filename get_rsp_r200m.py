@@ -8,23 +8,11 @@ from scipy.signal import savgol_filter
 
 emu = darkemu.base_class()
 
-
-def smooth_and_interpolate(x, y, window_size=11, polyorder=3, kind='cubic'):
-    if window_size % 2 == 0:
-        window_size += 1
-    window_size = min(window_size, len(y) - (1 - len(y) % 2))
-    y_smooth = savgol_filter(y, window_size, polyorder)
-    interpolator = interp1d(x, y_smooth, kind=kind, bounds_error=False, fill_value="extrapolate")
-    return y_smooth, interpolator
-
-
-
 class constants():
       H0 = 100
       wv = 0.00064 # dark emulator has fixed neutrinos
       G = 4.301e-9
       delta_crit = 1.686 # critical density spherical collapse
-
 
 class splashsim(constants):
     def __init__(self, wb=0.02225, wc=0.1198, omg_de=0.6844, ln1e10As=3.094, ns=0.9645, w=-1):
@@ -64,19 +52,18 @@ class splashsim(constants):
 
     def logM200m2rsp(self, logmh, z):
         M = 10**logmh
-        rs_fine = np.logspace(-2, np.log10(20), 151)
+        r200m = self.M200m2r200m(logmh)
+        rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 80)
         xihm = emu.get_xicross_mass(rs_fine, M, z)
 
-
-
+        from scipy.signal import savgol_filter
+        slope = savgol_filter(np.log10(xihm),window_length=15,polyorder=3,deriv=1,delta=np.log10(rs_fine[1]/rs_fine[0]))
         from scipy.interpolate import InterpolatedUnivariateSpline as ius
-        spl_func    =   ius(np.log10(rs_fine), np.log10(xihm))
-        self.diff_func   =   spl_func.derivative(n=1)
+        self.diff_func    =   ius(np.log10(rs_fine), slope)
         xx  = np.log10(rs_fine[1:-1])
         yy  = self.diff_func(xx)
         from scipy.optimize import minimize, rosen, rosen_der
         res = minimize(self.diff_func, x0=xx[np.argmin(yy)], bounds=((xx[0],xx[-1]),))
-        r200m = self.M200m2r200m(logmh)
         rsp = 10**res.x[0]
         print(f"M={logmh:.2f} [h^-1 M_sun], r200m={r200m:.3f} [h^-1 Mpc], rsp={rsp:.3f} [h^-1 Mpc], rsp/r200m={rsp/r200m:.3f}, min_slope={res.fun:.3f}")
         return rsp
@@ -89,7 +76,7 @@ def plot_rsp_vs_peak_height_varying_omega():
 
     redshift = 0.0
 
-    plt.figure(figsize=(15, 12))
+    plt.figure(figsize=(9, 9))
     ax = plt.subplot(3, 3, 1)
     ax1 = plt.subplot(3, 3, 2)
     ax2 = plt.subplot(3, 3, 3)
@@ -194,7 +181,7 @@ def plot_rsp_vs_peak_height_varying_omega():
     ax5.set_xlabel(r'$\log M_{200m}$ [$h^{-1}M_\odot$]')
     ax5.set_title('Radii vs. mass')
 
-    ax.legend(fontsize='xx-small')
+    ax.legend(fontsize='x-small')
     ax2.legend(fontsize='small')
     ax3.legend(fontsize='small')
     ax4.legend(fontsize='small')
