@@ -58,39 +58,54 @@ class splashsim():
         Convert M200m to r200m (radius containing 200x mean density)
 
         Parameters:
-        - logmh: log10 of the halo mass M200m in solar masses
+        - logmh: log10 of the halo mass M200m in h^-1 solar masses
 
         Returns:
-        - r200m: radius in Mpc
+        - r200m: radius in h^-1 Mpc
         """
-        m_tot = 10**logmh  # total mass of the halo in solar masses
+        # Input is already in h^-1 M_sun, which is what we want
+        m_tot = 10**logmh  # total mass in h^-1 M_sun units
 
-        # Calculate critical density in M_sun/Mpc^3
-        # ρ_crit = 3H²/8πG
-        rho_crit = 3*self.H0**2/(8*np.pi*self.G)
+        # Calculate critical density in h^2 M_sun/(h^-1 Mpc)^3
+        # ρ_crit = 3H²/(8πG) expressed in h^2 M_sun/(h^-1 Mpc)^3
+        rho_crit_h = 3*(self.H0/100.0)**2/(8*np.pi*self.G)  # in h^2 M_sun/(h^-1 Mpc)^3
 
-        # Calculate mean density of the universe
+        # Calculate mean density of the universe in h^2 M_sun/(h^-1 Mpc)^3
         # ρ_mean = Ωm * ρ_crit
-        rho_mean = self.Om0 * rho_crit
+        rho_mean_h = self.Om0 * rho_crit_h  # in h^2 M_sun/(h^-1 Mpc)^3
 
-        # Calculate r200m: the radius where mean density is 200*ρ_mean
-        # M200m = (4π/3) * 200ρ_mean * r200m³
-        r_200m = (3*m_tot/(4*np.pi*200*rho_mean))**(1./3.)
+        # For h^-1 Mpc units, we need to adjust the density calculation
+        # Since m_tot is in h^-1 M_sun, and we want r_200m in h^-1 Mpc:
+        # M200m [h^-1 M_sun] = (4π/3) * 200 * ρ_mean [h^2 M_sun/(h^-1 Mpc)^3] * (r200m [h^-1 Mpc])^3 / h^2
+        # Solving for r200m:
+        r_200m = (3*m_tot*self.h**2/(4*np.pi*200*rho_mean_h))**(1./3.)  # in h^-1 Mpc
 
         return r_200m
 
     def _spl_M200m2nu(self, z):
         """Initialize spline for peak height calculation"""
+        # dark_emulator uses h^-1 M_sun units for mh
         mh, sigmh, mul_func = emu.get_f_HMF(z)
-        # Normalize by growth factor to get sigma(M) at z=0
-        self.spl_logMh2sigM = ius(np.log10(mh), sigmh)#/emu.Dgrowth_from_z(z))
+        # Create spline - no need to convert units as emulator already works in h^-1 M_sun
+        self.spl_logMh2sigM = ius(np.log10(mh), sigmh)
         self.init_spl_M200m2nu = True
         self.init_redshift = z
 
     def logM200m2nu(self, logmh, z):
-        """Convert M200m to peak height nu"""
+        """
+        Convert M200m to peak height nu
+
+        Parameters:
+        - logmh: log10 of halo mass in h^-1 solar masses
+        - z: redshift
+
+        Returns:
+        - nu: peak height
+        """
         if not self.init_spl_M200m2nu or z != self.init_redshift:
             self._spl_M200m2nu(z)
+
+        # No need to convert units - dark_emulator already works with h^-1 M_sun
         self.delta_crit = 1.686
         return self.delta_crit/self.spl_logMh2sigM(logmh)
 
@@ -99,19 +114,20 @@ class splashsim():
         Find splashback radius by locating minimum of d(log xi)/d(log r)
 
         Parameters:
-        - logmh: log10 of halo mass in solar masses
+        - logmh: log10 of halo mass in h^-1 solar masses
         - z: redshift
 
         Returns:
-        - Splashback radius in Mpc
+        - Splashback radius in h^-1 Mpc
         """
-        M = 10**logmh
+        # No need to convert mass units - dark_emulator works with h^-1 M_sun
+        M = 10**logmh  # Mass in h^-1 M_sun
 
-        # Create a more finely sampled radius array, focusing on expected rsp range
-        # Use more points in the critical region (0.5-5 Mpc) where splashback is expected
-        rs_fine = np.logspace(-1, 1, 500)  # Increased from 100 to 500 points
+        # Create a more finely sampled radius array in h^-1 Mpc
+        rs_fine = np.logspace(-1, 1, 500)  # h^-1 Mpc
 
         # Get halo-matter cross-correlation function
+        # dark_emulator expects mass in h^-1 M_sun and radius in h^-1 Mpc
         xihm = emu.get_xicross_mass(rs_fine, M, z)
 
         # Convert to log space
@@ -131,11 +147,11 @@ class splashsim():
 
         # Look only at the range where we expect the splashback radius
         # Typically the splashback radius is around 1-3 times r200m
-        r200m = self.M200m2r200m(logmh)
+        r200m = self.M200m2r200m(logmh)  # in h^-1 Mpc
 
         # Find indices corresponding to reasonable range (0.5-5 times r200m)
-        min_r_idx = np.argmin(np.abs(10**xx - 0.5*r200m))
-        max_r_idx = np.argmin(np.abs(10**xx - 5.0*r200m))
+        min_r_idx = np.argmin(np.abs(10**xx - 0.1*r200m))
+        max_r_idx = np.argmin(np.abs(10**xx - 2.0*r200m))
 
         # Restrict search to this range
         search_range = slice(min_r_idx, max_r_idx)
@@ -150,11 +166,11 @@ class splashsim():
             if y_smooth[fallback_min_idx] < y_smooth[min_idx]:
                 min_idx = fallback_min_idx
 
-        # Return the radius corresponding to this minimum
+        # Return the radius corresponding to this minimum (in h^-1 Mpc)
         rsp = 10**xx[min_idx]
 
         # Debug information
-        print(f"M={logmh:.2f}, r200m={r200m:.3f}, rsp={rsp:.3f}, rsp/r200m={rsp/r200m:.3f}, min_slope={y_smooth[min_idx]:.3f}")
+        print(f"M={logmh:.2f} [h^-1 M_sun], r200m={r200m:.3f} [h^-1 Mpc], rsp={rsp:.3f} [h^-1 Mpc], rsp/r200m={rsp/r200m:.3f}, min_slope={y_smooth[min_idx]:.3f}")
 
         return rsp
 
@@ -184,8 +200,8 @@ def plot_rsp_vs_peak_height_varying_omega():
 
     redshift = 0.0  # Fixed redshift for all calculations
 
-    # Create a 3x3 grid of subplots
-    #fig = plt.figure(figsize=(15, 12))
+    # Create a figure
+    plt.figure(figsize=(15, 12))
 
     # Set up plotting areas
     ax = plt.subplot(3, 3, 1)  # Cross-correlation function
@@ -223,21 +239,22 @@ def plot_rsp_vs_peak_height_varying_omega():
         print(f"  Cosmology set: H0={H0}, Om0={om}, Ob0={Ob_true}")
         print(f"  Critical density: {cosmo.rho_c(0):.3e} M_sun/Mpc^3")
 
-        # Range of halo masses (log10 scale)
+        # Range of halo masses (log10 scale) in h^-1 M_sun
         logm_values = np.linspace(12.5, 15.0, 5)
         nu_values = []
         rsp_values = []
         r200m_values = []
 
         for logm in logm_values:
-            M = 10**logm
+            M = 10**logm  # Mass in h^-1 M_sun
 
             # Calculate halo-matter cross correlation
-            rs = np.logspace(-1, 1, 100)
+            # The emulator expects distances in h^-1 Mpc
+            rs = np.logspace(-1, 1, 100)  # h^-1 Mpc
             xihm = emu.get_xicross_mass(rs, M, redshift)
 
             # Plot cross-correlation
-            ax.plot(rs, xihm, label=f'$\\log M_{{h}} = {logm:.2f}$')
+            ax.plot(rs, xihm, label=f'$\\log M_{{h}} = {logm:.2f}$ $h^{{-1}}M_\\odot$')
 
             # Calculate and plot derivative
             log_rs = np.log10(rs)
@@ -260,12 +277,12 @@ def plot_rsp_vs_peak_height_varying_omega():
             nu_values.append(nu)
 
             # Calculate splashback radius
-            rsp = sim.logM200m2rsp(logm, redshift)
+            rsp = sim.logM200m2rsp(logm, redshift)  # in h^-1 Mpc
             ax1.axvline(rsp, linestyle='--', alpha=0.5)
             rsp_values.append(rsp)
 
             # Calculate r200m
-            r200m = sim.M200m2r200m(logm)
+            r200m = sim.M200m2r200m(logm)  # in h^-1 Mpc
             r200m_values.append(r200m)
 
         # Convert lists to arrays for easier handling
@@ -274,7 +291,11 @@ def plot_rsp_vs_peak_height_varying_omega():
         r200m_values    = np.array(r200m_values)
 
         # Get r200m from colossus for comparison
-        R200m_colossus = mass_so.M_to_R(10**np.array(logm_values), redshift, '200m')/1e3  # Convert to Mpc
+        # Colossus expects masses in M_sun and returns radii in kpc - need to adjust
+        colossus_masses = 10**np.array(logm_values) * h  # Convert from h^-1 M_sun to M_sun
+        # Colossus returns radii in kpc, so we convert to h^-1 Mpc:
+        # First to Mpc (divide by 1000), then to h^-1 Mpc (multiply by h)
+        R200m_colossus = mass_so.M_to_R(colossus_masses, redshift, '200m')/1000.0 * h  # Convert to h^-1 Mpc
 
         # Plot radii comparison
         ax2.plot(nu_values, rsp_values, '-o', label='$r_{sp}$')
@@ -288,7 +309,8 @@ def plot_rsp_vs_peak_height_varying_omega():
                  '--', label='More+15')
 
         # Plot peak height calculations
-        nu_colossus = peaks.peakHeight(10**np.array(logm_values), z=redshift)
+        # Colossus expects masses in M_sun
+        nu_colossus = peaks.peakHeight(colossus_masses, z=redshift)
         ax4.plot(logm_values, nu_values, '-o', label='Our calc')
         ax4.plot(logm_values, nu_colossus, '--s', label='colossus')
 
@@ -299,17 +321,17 @@ def plot_rsp_vs_peak_height_varying_omega():
     # Set axis properties
     ax.set_xscale('log')
     ax.set_yscale('log')
-    ax.set_xlabel('$r$ [Mpc]')
+    ax.set_xlabel('$r$ [$h^{-1}$Mpc]')
     ax.set_ylabel(r'$\xi_{hm}(r)$')
     ax.set_title('Halo-matter cross-correlation')
 
     ax1.set_xscale('log')
-    ax1.set_xlabel('$r$ [Mpc]')
+    ax1.set_xlabel('$r$ [$h^{-1}$Mpc]')
     ax1.set_ylabel(r'$d\log \xi_{hm} / d \log r$')
     ax1.set_title('Derivative of cross-correlation')
 
     ax2.set_xlabel('$\\nu$')
-    ax2.set_ylabel(r'$r$ [Mpc]')
+    ax2.set_ylabel(r'$r$ [$h^{-1}$Mpc]')
     ax2.set_title('Radii vs. peak height')
 
     ax3.set_xlabel('$\\nu$')
@@ -317,11 +339,11 @@ def plot_rsp_vs_peak_height_varying_omega():
     ax3.set_title('Splashback to $r_{200m}$ ratio')
 
     ax4.set_ylabel('$\\nu$')
-    ax4.set_xlabel(r'$\log M_{200m}$')
+    ax4.set_xlabel(r'$\log M_{200m}$ [$h^{-1}M_\odot$]')
     ax4.set_title('Peak height vs. mass')
 
-    ax5.set_ylabel('$r$ [Mpc]')
-    ax5.set_xlabel(r'$\log M_{200m}$')
+    ax5.set_ylabel('$r$ [$h^{-1}$Mpc]')
+    ax5.set_xlabel(r'$\log M_{200m}$ [$h^{-1}M_\odot$]')
     ax5.set_title('Radii vs. mass')
 
     # Add legends
