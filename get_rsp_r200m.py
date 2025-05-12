@@ -15,7 +15,7 @@ class constants():
       delta_crit = 1.686 # critical density spherical collapse
 
 class splashsim(constants):
-    def __init__(self, wb=0.02225, wc=0.1198, omg_de=0.6844, ln1e10As=3.094, ns=0.9645, w=-1):
+    def __init__(self, wb=0.02225, wc=0.1198, omg_de=0.7, ln1e10As=3.094, ns=0.9645, w=-1):
         self.wb         = wb
         self.wc         = wc
         self.omg_de     = omg_de
@@ -53,13 +53,17 @@ class splashsim(constants):
     def logM200m2rsp(self, logmh, z):
         M = 10**logmh
         r200m = self.M200m2r200m(logmh)
-        rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 80)
+        #rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 30)
+        rs_fine = np.logspace(np.log10(0.02), np.log10(20), 100)
         xihm = emu.get_xicross_mass(rs_fine, M, z)
 
-        from scipy.signal import savgol_filter
-        slope = savgol_filter(np.log10(xihm),window_length=15,polyorder=3,deriv=1,delta=np.log10(rs_fine[1]/rs_fine[0]))
+        from scipy.optimize import curve_fit
+
+        #from scipy.signal import savgol_filter
+        #slope = savgol_filter(np.log10(xihm),window_length=5,polyorder=3,deriv=1,delta=np.log10(rs_fine[1]/rs_fine[0]))
         from scipy.interpolate import InterpolatedUnivariateSpline as ius
-        self.diff_func    =   ius(np.log10(rs_fine), slope)
+        self.diff_func    =   ius(np.log10(rs_fine), np.log10(xihm)).derivative(n=1)
+        #self.diff_func    =   ius(np.log10(rs_fine), slope)
         xx  = np.log10(rs_fine[1:-1])
         yy  = self.diff_func(xx)
         from scipy.optimize import minimize, rosen, rosen_der
@@ -142,7 +146,7 @@ def plot_rsp_vs_peak_height_varying_omega():
     ax2.plot(nu_values, r200m_values, '-s', label='$r_{200m}$')
     ax2.plot(nu_values, R200m_colossus, '-^', label='colossus $r_{200m}$')
 
-    ax3.plot(nu_values, rsp_values/r200m_values, '-o', label=f'$\\Omega_m = {om}$')
+    ax3.plot(nu_values, rsp_values/r200m_values, '-o', label=f'$\\Omega_m = {om:2.2f}$')
     ax3.plot(nu_values, splashback.modelMore15RspR200m(nu200m=nu_values, z=redshift, statistic='median'),
              '--', label='More+15')
 
