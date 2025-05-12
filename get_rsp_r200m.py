@@ -8,6 +8,9 @@ from scipy.signal import savgol_filter
 
 emu = darkemu.base_class()
 
+from model_fast import splash
+
+
 class constants():
       H0 = 100
       wv = 0.00064 # dark emulator has fixed neutrinos
@@ -51,25 +54,44 @@ class splashsim(constants):
         return self.spl_logMh2nu(logmh)
 
     def logM200m2rsp(self, logmh, z):
-        M = 10**logmh
-        r200m = self.M200m2r200m(logmh)
+        M       = 10**logmh
+        r200m   = self.M200m2r200m(logmh)
         #rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 30)
         rs_fine = np.logspace(np.log10(0.02), np.log10(20), 100)
-        xihm = emu.get_xicross_mass(rs_fine, M, z)
+        xihm    = emu.get_xicross_mass(rs_fine, M, z)
 
+        nu      = self.logM200m2nu(logmh, z)
+        r200m   = self.M200m2r200m(logmh)
+
+        def model(x,Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
+            alpha       = 0.155 + 0.0095*nu**2
+            R_out       =  5*r200m
+            Log_Alpha   =   np.log10(alpha)
+            Log_Beta    =   np.log10(6)
+            Log_Gamma   =   np.log10(4)
+            F_cen       =   1.0
+            R_off       =   0.0
+            sp = splash(Log_Rho_s, Log_Alpha, Log_R_s, Log_Rho_0, S_e, Log_R_t, Log_Beta, Log_Gamma, F_cen, R_off, R_out)
+            logxihm     =   sp.log_xi_3d(x)
+            diff_xi_3d  =   sp.diff_xi_3d(x)
+            ans         =   sp.rsp_3d(x)
+            rsp         =   ans[0]
+            slope       =   ans[1]
+            return logxihm, diff_xi_3d, rsp, slope
+
+        def model_logxihm(x, Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
+              logxihm, _, _, _ = model(x, Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t)
+              return logxihm
         from scipy.optimize import curve_fit
+        popt, pcov = curve_fit(model_logxihm, np.log10(rs_fine), np.log10(xihm), p0=[4,0,0,1.0,0.0])
+        log_xihm, diff_xi3d, rsp, slope = model(np.log10(rs_fine),*popt)
+        self.log_xihm   = log_xihm
+        self.diff_xi3d  = diff_xi3d
 
-        #from scipy.signal import savgol_filter
-        #slope = savgol_filter(np.log10(xihm),window_length=5,polyorder=3,deriv=1,delta=np.log10(rs_fine[1]/rs_fine[0]))
-        from scipy.interpolate import InterpolatedUnivariateSpline as ius
-        self.diff_func    =   ius(np.log10(rs_fine), np.log10(xihm)).derivative(n=1)
-        #self.diff_func    =   ius(np.log10(rs_fine), slope)
-        xx  = np.log10(rs_fine[1:-1])
-        yy  = self.diff_func(xx)
-        from scipy.optimize import minimize, rosen, rosen_der
-        res = minimize(self.diff_func, x0=xx[np.argmin(yy)], bounds=((xx[0],xx[-1]),))
-        rsp = 10**res.x[0]
-        print(f"M={logmh:.2f} [h^-1 M_sun], r200m={r200m:.3f} [h^-1 Mpc], rsp={rsp:.3f} [h^-1 Mpc], rsp/r200m={rsp/r200m:.3f}, min_slope={res.fun:.3f}")
+        xihm    =   10**(log_xihm)
+        rsp     =   rsp
+        slope   =   slope
+        print(f"M={logmh:.2f} [h^-1 M_sun], r200m={r200m:.3f} [h^-1 Mpc], rsp={rsp:.3f} [h^-1 Mpc], rsp/r200m={rsp/r200m:.3f}, min_slope={slope:.3f}")
         return rsp
 
 def plot_rsp_vs_peak_height_varying_omega():
