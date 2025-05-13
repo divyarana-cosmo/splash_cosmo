@@ -56,8 +56,8 @@ class splashsim(constants):
     def logM200m2rsp(self, logmh, z):
         M       = 10**logmh
         r200m   = self.M200m2r200m(logmh)
-        #rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 30)
-        rs_fine = np.logspace(np.log10(0.02), np.log10(20), 100)
+        rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 100)
+        #rs_fine = np.logspace(np.log10(0.02), np.log10(20), 100)
         xihm    = emu.get_xicross_mass(rs_fine, M, z)
 
         nu      = self.logM200m2nu(logmh, z)
@@ -70,7 +70,7 @@ class splashsim(constants):
             Log_Beta    =   np.log10(6)
             Log_Gamma   =   np.log10(4)
             F_cen       =   1.0
-            R_off       =   0.0
+            R_off       =   0.1
             sp = splash(Log_Rho_s, Log_Alpha, Log_R_s, Log_Rho_0, S_e, Log_R_t, Log_Beta, Log_Gamma, F_cen, R_off, R_out)
             logxihm     =   sp.log_xi_3d(x)
             diff_xi_3d  =   sp.diff_xi_3d(x)
@@ -80,13 +80,14 @@ class splashsim(constants):
             return logxihm, diff_xi_3d, rsp, slope
 
         def model_logxihm(x, Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
-              logxihm, _, _, _ = model(x, Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t)
-              return logxihm
+              logxihm, _, _, _ = model(np.log10(x), Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t)
+              return 10**logxihm * x**2
         from scipy.optimize import curve_fit
-        popt, pcov = curve_fit(model_logxihm, np.log10(rs_fine), np.log10(xihm), p0=[4,0,0,1.0,0.0])
+        popt, pcov = curve_fit(model_logxihm, rs_fine, rs_fine**2 * xihm, p0=[4,0,0,2.0,0.0])
         log_xihm, diff_xi3d, rsp, slope = model(np.log10(rs_fine),*popt)
-        self.log_xihm   = log_xihm
-        self.diff_xi3d  = diff_xi3d
+        self.log_xihm   =   log_xihm
+        self.diff_xi3d  =   diff_xi3d
+        self.logr       =   np.log10(rs_fine)
 
         xihm    =   10**(log_xihm)
         rsp     =   rsp
@@ -134,32 +135,33 @@ def plot_rsp_vs_peak_height_varying_omega():
     rsp_values = []
     r200m_values = []
 
-    for logm in logm_values:
+    for nn,logm in enumerate(logm_values):
         M = 10**logm
         rs = np.logspace(-1, 1, 200)
+        # essential calculations
         xihm = emu.get_xicross_mass(rs, M, redshift)
-
-        ax.plot(rs, xihm, label=f'$\\log M_{{h}} = {logm:.2f}$ $h^{{-1}}M_\\odot$')
-
-        log_rs = np.log10(rs)
-        log_xihm = np.log10(xihm)
-        rsp = sim.logM200m2rsp(logm, redshift)
-        yy = sim.diff_func(log_rs)
-        xx =log_rs
-        ax1.plot(10**xx, yy, '-')
-
-        nu = sim.logM200m2nu(logm, redshift)
+        log_rs      = np.log10(rs)
+        log_xihm    = np.log10(xihm)
+        # peak height
+        nu          = sim.logM200m2nu(logm, redshift)
         nu_values.append(nu)
-        rsp = sim.logM200m2rsp(logm, redshift)
-        ax1.axvline(rsp, linestyle='--', alpha=0.5)
+        # splashback radius
+        rsp         = sim.logM200m2rsp(logm, redshift)
         rsp_values.append(rsp)
-
+        # overdensity size assignment#
         r200m = sim.M200m2r200m(logm)
         r200m_values.append(r200m)
 
-    nu_values = np.array(nu_values)
-    rsp_values = np.array(rsp_values)
-    r200m_values = np.array(r200m_values)
+        # plotting the xihm and the log-log slopes
+        ax.plot(rs, xihm, '.',label=f'$\\log M_{{h}} = {logm:.2f}$ $h^{{-1}}M_\\odot$', c='C%d'%nn)
+        ax.plot(10**sim.logr,10**sim.log_xihm, '-', c='C%d'%nn)
+
+        ax1.plot(10**sim.logr,sim.diff_xi3d, '-', c='C%d'%nn)
+        ax1.axvline(rsp, linestyle='--', alpha=0.5, c='C%d'%nn)
+
+    nu_values       = np.array(nu_values)
+    rsp_values      = np.array(rsp_values)
+    r200m_values    = np.array(r200m_values)
 
     colossus_masses = 10**np.array(logm_values)
     R200m_colossus = mass_so.M_to_R(colossus_masses, redshift, '200m')/1000.0
