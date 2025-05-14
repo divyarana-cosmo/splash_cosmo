@@ -75,18 +75,8 @@ class splashsim(constants):
 
             val = 0.0*x
             idx = (x>np.log10(0.5*r200m))
-            val[idx] = np.log10(self.rho_out(10**x[idx]))
 
-            def log_xi_3d(self,log_r):
-                r = 10**log_r
-                val = self.rho_in(r)*self.f_trans(r) +
-                val = np.log10(val)
-                return val
-
-
-
-
-            logxihm     =   sp.log_xi_3d(x)
+            logxihm     = np.log10(np.concatenate(sp.rho_in(10**x[~idx])*sp.f_trans(10**x[~idx]), sp.rho_out(10**x[idx])))
             diff_xi_3d  =   sp.diff_xi_3d(x)
             ans         =   sp.rsp_3d(x)
             rsp         =   ans[0]
