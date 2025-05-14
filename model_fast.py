@@ -1,6 +1,5 @@
 # Given projected radial range will predict the 2pcf_2D and other functions
 # Formalism is followed from ryoma's 2020 paper - https://arxiv.org/abs/2001.01160
-
 import numpy as np
 from scipy.integrate import quad,simps,cumtrapz,fixed_quad
 from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
