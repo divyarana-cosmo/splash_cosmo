@@ -56,46 +56,59 @@ class splashsim(constants):
     def logM200m2rsp(self, logmh, z):
         M       = 10**logmh
         r200m   = self.M200m2r200m(logmh)
-        rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 100)
+        rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 300)
         #rs_fine = np.logspace(np.log10(0.02), np.log10(20), 100)
         xihm    = emu.get_xicross_mass(rs_fine, M, z)
 
         nu      = self.logM200m2nu(logmh, z)
         r200m   = self.M200m2r200m(logmh)
 
-        def model(x,Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
-            alpha       = 0.155 + 0.0095*nu**2
-            R_out       =  5*r200m
-            Log_Alpha   =   np.log10(alpha)
-            Log_Beta    =   np.log10(6)
-            Log_Gamma   =   np.log10(4)
-            F_cen       =   1.0
-            R_off       =   0.1
-            sp = splash(Log_Rho_s, Log_Alpha, Log_R_s, Log_Rho_0, S_e, Log_R_t, Log_Beta, Log_Gamma, F_cen, R_off, R_out)
+        #def model(x,Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
+        #    alpha       = 0.155 + 0.0095*nu**2
+        #    R_out       =  5*r200m
+        #    Log_Alpha   =   np.log10(alpha)
+        #    Log_Beta    =   np.log10(6)
+        #    Log_Gamma   =   np.log10(4)
+        #    F_cen       =   1.0
+        #    R_off       =   0.1
+        #    sp = splash(Log_Rho_s, Log_Alpha, Log_R_s, Log_Rho_0, S_e, Log_R_t, Log_Beta, Log_Gamma, F_cen, R_off, R_out)
 
-            val = 0.0*x
-            idx = (x>np.log10(0.5*r200m))
+        #    #val = 0.0*x
+        #    #idx = (x>np.log10(0.5*r200m))
 
-            logxihm     = np.log10(np.concatenate(sp.rho_in(10**x[~idx])*sp.f_trans(10**x[~idx]), sp.rho_out(10**x[idx])))
-            diff_xi_3d  =   sp.diff_xi_3d(x)
-            ans         =   sp.rsp_3d(x)
-            rsp         =   ans[0]
-            slope       =   ans[1]
-            return logxihm, diff_xi_3d, rsp, slope
+        #    #logxihm = np.log10(np.concatenate([
+        #    #                    sp.rho_in(10**x[~idx]) * sp.f_trans(10**x[~idx]),
+        #    #                    10**sp.log_xi_3d(x[idx])
+        #    #                    ]))
 
-        def model_logxihm(x, Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
-              logxihm, _, _, _ = model(np.log10(x), Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t)
-              return 10**logxihm * x**2
-        from scipy.optimize import curve_fit
-        popt, pcov = curve_fit(model_logxihm, rs_fine, rs_fine**2 * xihm, p0=[4,0,0,2.0,0.0])
-        log_xihm, diff_xi3d, rsp, slope = model(np.log10(rs_fine),*popt)
-        self.log_xihm   =   log_xihm
-        self.diff_xi3d  =   diff_xi3d
+        #    logxihm     =   sp.log_xi_3d(x)
+        #    diff_xi_3d  =   sp.diff_xi_3d(x)
+        #    ans         =   sp.rsp_3d(x)
+        #    rsp         =   ans[0]
+        #    slope       =   ans[1]
+        #    return logxihm, diff_xi_3d, rsp, slope
+
+        #def model_logxihm(x, Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
+        #      logxihm, _, _, _ = model(np.log10(x), Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t)
+        #      return 10**logxihm * x**2
+
+        #from scipy.optimize import curve_fit
+        #popt, pcov = curve_fit(model_logxihm, rs_fine, rs_fine**2 * xihm, p0=[4,0,0,2.0,0.0])
+        #log_xihm, diff_xi3d, rsp, slope = model(np.log10(rs_fine),*popt)
+
+        #golay filter thingy
+        from scipy.signal import savgol_filter
+        from scipy.optimize import minimize
+        from scipy.interpolate import interp1d
+
+        self.log_xihm   =   np.log10(xihm)
+        self.diff_xi3d  =   savgol_filter(np.log10(xihm), window_length=15, polyorder=3, deriv=1,delta=np.log10(rs_fine[1]/rs_fine[0])) #diff_xi3d
         self.logr       =   np.log10(rs_fine)
-
-        xihm    =   10**(log_xihm)
-        rsp     =   rsp
-        slope   =   slope
+        func = interp1d(self.logr, self.diff_xi3d, kind='cubic')
+        res  = minimize(func, x0=0.0)
+        #xihm    =   10**(log_xihm)
+        rsp     =   10**res.x[0]#rsp
+        slope   =   res.fun#slope
         print(f"M={logmh:.2f} [h^-1 M_sun], r200m={r200m:.3f} [h^-1 Mpc], rsp={rsp:.3f} [h^-1 Mpc], rsp/r200m={rsp/r200m:.3f}, min_slope={slope:.3f}")
         return rsp
 
@@ -157,8 +170,8 @@ def plot_rsp_vs_peak_height_varying_omega():
         r200m_values.append(r200m)
 
         # plotting the xihm and the log-log slopes
-        ax.plot(rs, xihm, '.',label=f'$\\log M_{{h}} = {logm:.2f}$ $h^{{-1}}M_\\odot$', c='C%d'%nn)
-        ax.plot(10**sim.logr,10**sim.log_xihm, '-', c='C%d'%nn)
+        ax.plot(rs, xihm, '.',label=f'$\\log M_{{h}} = {logm:.2f}$ $h^{{-1}}M_\\odot$', c='C%d'%nn, alpha=0.2)
+        ax.plot(10**sim.logr,10**sim.log_xihm, '-', c='C%d'%nn, zorder=2)
 
         ax1.plot(10**sim.logr,sim.diff_xi3d, '-', c='C%d'%nn)
         ax1.axvline(rsp, linestyle='--', alpha=0.5, c='C%d'%nn)
