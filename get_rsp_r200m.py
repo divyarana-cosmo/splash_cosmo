@@ -56,9 +56,9 @@ class splashsim(constants):
     def logM200m2rsp(self, logmh, z):
         M       = 10**logmh
         r200m   = self.M200m2r200m(logmh)
-        rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 300)
+        self.rs_fine = np.logspace(np.log10(0.02*r200m), np.log10(20*r200m), 300)
         #rs_fine = np.logspace(np.log10(0.02), np.log10(20), 100)
-        xihm    = emu.get_xicross_mass(rs_fine, M, z)
+        xihm    = emu.get_xicross_mass(self.rs_fine, M, z)
 
         nu      = self.logM200m2nu(logmh, z)
         r200m   = self.M200m2r200m(logmh)
@@ -102,8 +102,8 @@ class splashsim(constants):
         from scipy.interpolate import interp1d
 
         self.log_xihm   =   np.log10(xihm)
-        self.diff_xi3d  =   savgol_filter(np.log10(xihm), window_length=15, polyorder=3, deriv=1,delta=np.log10(rs_fine[1]/rs_fine[0])) #diff_xi3d
-        self.logr       =   np.log10(rs_fine)
+        self.diff_xi3d  =   savgol_filter(np.log10(xihm), window_length=15, polyorder=3, deriv=1,delta=np.log10(self.rs_fine[1]/self.rs_fine[0])) #diff_xi3d
+        self.logr       =   np.log10(self.rs_fine)
         func = interp1d(self.logr, self.diff_xi3d, kind='cubic')
         res  = minimize(func, x0=0.0)
         #xihm    =   10**(log_xihm)
@@ -170,8 +170,8 @@ def plot_rsp_vs_peak_height_varying_omega():
         r200m_values.append(r200m)
 
         # plotting the xihm and the log-log slopes
-        ax.plot(rs, xihm, '.',label=f'$\\log M_{{h}} = {logm:.2f}$ $h^{{-1}}M_\\odot$', c='C%d'%nn, alpha=0.2)
-        ax.plot(10**sim.logr,10**sim.log_xihm, '-', c='C%d'%nn, zorder=2)
+        ax.plot(sim.rs_fine, 10**sim.log_xihm, '.',label=f'$\\log M_{{h}} = {logm:.2f}$ $h^{{-1}}M_\\odot$', c='C%d'%nn, alpha=0.2)
+        #ax.plot(10**sim.logr,10**sim.log_xihm, '-', c='C%d'%nn, zorder=2)
 
         ax1.plot(10**sim.logr,sim.diff_xi3d, '-', c='C%d'%nn)
         ax1.axvline(rsp, linestyle='--', alpha=0.5, c='C%d'%nn)
@@ -214,6 +214,8 @@ def plot_rsp_vs_peak_height_varying_omega():
     ax2.set_ylabel(r'$r$ [$h^{-1}$Mpc]')
     ax2.set_title('Radii vs. peak height')
 
+    ax3.set_ylim(0.9,1.55)
+    ax3.set_xlim(0,5)
     ax3.set_xlabel('$\\nu$')
     ax3.set_ylabel(r'$r_{sp}/r_{200m}$')
     ax3.set_title('Splashback to $r_{200m}$ ratio')
