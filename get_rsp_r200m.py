@@ -56,7 +56,8 @@ class splashsim(constants):
     def logM200m2rsp(self, logmh, z):
         M       = 10**logmh
         r200m   = self.M200m2r200m(logmh)
-        self.rs_fine = np.logspace(np.log10(0.1*r200m), np.log10(20*r200m), 300)
+        #self.rs_fine = np.logspace(np.log10(0.1*r200m), np.log10(10*r200m), 300)
+        self.rs_fine = np.logspace(-1, 1, 300)
         #rs_fine = np.logspace(np.log10(0.02), np.log10(20), 100)
         xihm    =   emu.get_xicross_mass(self.rs_fine, M, z)
         esd     =   emu.get_DeltaSigma_mass(self.rs_fine, M, z)
@@ -69,10 +70,10 @@ class splashsim(constants):
 
         self.log_esd    =   np.log10(esd)
         self.log_xihm   =   np.log10(xihm)
-        self.diff_xi3d  =   savgol_filter(np.log10(xihm), window_length=20, polyorder=3, deriv=1,delta=np.log10(self.rs_fine[1]/self.rs_fine[0])) #diff_xi3d
+        self.diff_xi3d  =   savgol_filter(np.log10(xihm), window_length=30, polyorder=3, deriv=1,delta=np.log10(self.rs_fine[1]/self.rs_fine[0])) #diff_xi3d
         self.logr       =   np.log10(self.rs_fine)
         func = interp1d(self.logr, self.diff_xi3d, kind='cubic')
-        res  = minimize(func, x0=0.0)
+        res  = minimize(func, x0=0.0, bounds=((self.logr[0],None),(self.logr[-1],None)))
         #xihm    =   10**(log_xihm)
         rsp     =   10**res.x[0]#rsp
         slope   =   res.fun#slope
@@ -86,10 +87,10 @@ def plot_rsp_vs_peak_height():
     from colossus.halo import splashback
 
     redshift = 0.0
-    ax  = plt.subplot(2, 2, 1)
-    ax1 = plt.subplot(2, 2, 2)
-    ax2 = plt.subplot(2, 2, 3)
-    ax3 = plt.subplot(2, 2, 4)
+    ax  = plt.subplot(3, 3, 1)
+    ax1 = plt.subplot(3, 3, 2)
+    ax2 = plt.subplot(3, 3, 3)
+    #ax3 = plt.subplot(2, 2, 4)
 
     sim = splashsim()
     Ob_true = sim.Ob0
@@ -107,7 +108,7 @@ def plot_rsp_vs_peak_height():
     cosmology.addCosmology(cosmology_name, **params)
     cosmo = cosmology.setCosmology(cosmology_name)
 
-    logm_values = np.linspace(13.5, 15.0, 8)
+    logm_values = np.linspace(14.15, 15.0, 4)
     nu_values = []
     rsp_values = []
     r200m_values = []
@@ -135,7 +136,8 @@ def plot_rsp_vs_peak_height():
     rsp_values      = np.array(rsp_values)
     r200m_values    = np.array(r200m_values)
 
-    ax3.plot(nu_values, rsp_values/r200m_values, '-o', label=f'$\\Omega_m = {om:2.2f}$')
+    #ax3.plot(nu_values, rsp_values/r200m_values, '-o', label=f'$\\Omega_m = {om:2.2f}$')
+
     ax.set_xscale('log')
     ax.set_yscale('log')
     ax.set_xlabel("$R\,[h^{-1}\mathrm{Mpc}]$")
@@ -150,10 +152,10 @@ def plot_rsp_vs_peak_height():
     ax2.set_xscale('log')
     ax2.set_xlabel('$r$ [$h^{-1}$Mpc]')
     ax2.set_ylabel(r'$d\log \xi_{hm} / d \log r$')
-    ax3.set_xlabel('$\\nu$')
-    ax3.set_ylabel(r'$r_{\rm sp}/r_{\rm 200m}$')
-    ax3.legend(fontsize='small')
-    plt.tight_layout()
+    #ax3.set_xlabel(r'$\nu_{\rm 200m}$')
+    #ax3.set_ylabel(r'$r_{\rm sp}/r_{\rm 200m}$')
+    #ax3.legend(fontsize='small')
+    #plt.tight_layout()
     plt.savefig('rsp_vs_nu.png', dpi=300)
     plt.clf()
     return 0
@@ -171,7 +173,7 @@ def plot_rsp_vs_peak_height_varying_omega():
         # plotting the delta sigma for each halo mass
         #ax.plot(sim.rs_fine, 10**sim.log_esd, '-', c='C%d'%mm, alpha=1.0)
 
-        logm_values = np.linspace(13.5, 15.0, 20)
+        logm_values = np.linspace(14.15, 15.0, 20)
         nu_values       = []
         rsp_values      = []
         r200m_values    = []
@@ -199,7 +201,7 @@ def plot_rsp_vs_peak_height_varying_omega():
     #ax.set_xlabel("$R\,[h^{-1}\mathrm{Mpc}]$")
     #ax.set_ylabel("$\Delta\Sigma(R)\,[h M_\odot \mathrm{pc}^{-2}]$")
 
-    ax1.set_xlabel('$\\nu$')
+    ax1.set_xlabel(r'$\nu_{\rm 200m}$')
     ax1.set_ylabel(r'$r_{\rm sp}/r_{\rm 200m}$')
     ax1.legend(fontsize='x-small')
     plt.tight_layout()
@@ -209,7 +211,7 @@ def plot_rsp_vs_peak_height_varying_omega():
 
 
 if __name__ == "__main__":
-    #plot_rsp_vs_peak_height()
+    plot_rsp_vs_peak_height()
     plot_rsp_vs_peak_height_varying_omega()
         #def model(x,Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
         #    alpha       = 0.155 + 0.0095*nu**2
