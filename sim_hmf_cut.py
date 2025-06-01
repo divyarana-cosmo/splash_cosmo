@@ -27,12 +27,12 @@ for ii,omgm in enumerate(omgmarr):
         r200mmat[ii,jj] = get_r200m(omgm, sigma8)
         print(omgm, sigma8)
 
-#plt.subplot(2,2,1)
 plt.figure(figsize=(8, 6))
+plt.subplot(2,2,1)
 im = plt.imshow(r200mmat.T, origin='lower', aspect='auto',
                 extent=[omgmarr[0], omgmarr[-1], sigma8arr[0], sigma8arr[-1]])
 plt.ylabel(r'$\sigma_8$', fontsize=12)
 plt.xlabel(r'$\Omega_m$', fontsize=12)
-plt.colorbar(im, label=r'$r_{\rm 200m} [h^{-1}Mpc]$')
+plt.colorbar(im, label=r'$r_{\rm 200m} [{\rm h^{-1}Mpc}]$')
 plt.savefig('test.png', dpi=600)
 
