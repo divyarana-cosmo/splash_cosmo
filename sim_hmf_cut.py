@@ -39,7 +39,7 @@ plt.subplot(2,2,1)
 im = plt.imshow(r200mmat.T, origin='lower', aspect='auto',
                 extent=[omgmarr[0], omgmarr[-1], sigma8arr[0], sigma8arr[-1]])
 plt.ylabel(r'$\sigma_8$', fontsize=12)
-plt.xlabel(r'$\Omega_m$', fontsize=12)
+plt.xlabel(r'$\Omega_{\rm m}$', fontsize=12)
 plt.colorbar(im, label=r'$r_{\rm 200m} [{\rm h^{-1}Mpc}]$')
 plt.savefig('test.png', dpi=600)
 
