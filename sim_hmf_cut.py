@@ -9,7 +9,7 @@ def get_r200m(omgm, sigma8):
     params = {'flat': True, 'H0': 100, 'Om0': omgm, 'Ob0': 0.049, 'sigma8': sigma8, 'ns': 0.95}
     cosmo = cosmology.setCosmology('myCosmo', **params)
     #get the average halo mass
-    xmh      = np.linspace(1e14,1e16,500)
+    xmh      = np.linspace(1e14,1e18,500)
     mfunc_so = mass_function.massFunction(xmh, 0.0, mdef = '200m', model = 'tinker08')
     avg_mh   = sum(mfunc_so*xmh)/sum(mfunc_so)
     #convert it to r200m
