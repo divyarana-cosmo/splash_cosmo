@@ -1,0 +1,100 @@
+
+
+#
+#---------------- an example to plot ---------------------
+# > sm
+#     : term x11
+#     : macro read mandc.sm
+#     : mandc
+#---------------------------------------------------------
+#
+# You can plot prediction with any of the three halo definitions through
+# uncommenting corresponding lines in macro "common1" below.
+#
+# This is only a sample macro file. You can plot many other useful quantities
+# with your own macros. The output format can be found in mandc.f.
+#
+
+mandc
+        define outputfile ? <please input name of the output file>
+        common1
+        if (nbin1==1) { mchist }
+        if (nbin1>1) { mc }
+
+mchist  #mass and concentration evolution along mass accretion history
+
+        set lgz1=lg(ztmp+1)
+        set lgm=lg(mtmp)
+        set lgz1c=lg(ztmp+1) IF(ctmp>0)
+        set c=ctmp IF(ctmp>0)
+        set lgc=lg(c)
+        set ms=mstmp IF(ctmp>0)
+        set lgms=lg(ms)
+
+        expand 1.3 lweight 2 ltype 0 ctype 0 define TeX_strings 1
+        set xl=-0.1 set xu=lg(20)
+        if(ispec==0){ limits $(xl) $(xu) -6. 3.
+        }else{ limits $(xl) $(xu) 6. 15. }
+        ticksize -1 0 -1 0 location 4000 29000 4000 29000 box 1 2 4 4
+        xlabel z+1
+        ctype 5
+        if(ispec==0){ ylabel M_h/M_{*,0} & M_s/M_{*,0}
+        }else{
+        ylabel M_h & M_s  [h^{-1} M_\odot]
+        }
+        ltype 0 connect lgz1 lgm
+        ltype 4 connect lgz1c lgms
+        ctype 0 ltype 0
+
+        limits $(xl) $(xu) 0. $(lg(40)) ticksize -1 0 -1 0
+        location 4000 29000 4000 29000 box 4 4 1 2 
+        ctype 3 ylabel \raise-24000 c
+        ltype 2 connect lgz1c lgc
+        ctype 0 ltype 0
+        relocate 0.1 1.4 label Evolution of halo properties along MAH 
+        relocate 0.2 1.3 label $outputfile
+
+mc      #mass denpendence of concentration at given redshift
+
+        set lgm=lg(mtmp) IF(ctmp>0)
+        set c=ctmp IF(ctmp>0)
+        set lgc=lg(c)
+
+        expand 1.3 lweight 2 ltype 0 ctype 0 define TeX_strings 1
+        if(ispec==0){ limits -4.0 3.0  0 $(lg(40))
+        }else{ limits 8.0 15.0  0 $(lg(40)) }
+        ticksize -1 0 -1 0 location 4000 29000 4000 29000 box 1 2
+        if(ispec==0){ xlabel M_h/M_{*,0}
+        relocate -1.5 1.4 label Concentration-Mass relation 
+        relocate -1.0 1.3 label $outputfile
+        }else{
+        xlabel M_h  [h^{-1} M_\odot]
+        relocate 10.5 1.4 label Concentration-Mass relation 
+        relocate 11.0 1.3 label $outputfile
+        }
+        ylabel c
+
+        ctype 3 ltype 0
+        connect lgm lgc
+        ctype 0 ltype 0
+
+common1
+        data $outputfile
+        lines 1 1 read { ispec 1 nbin1 2 }
+        lines 2 5000
+        read { ztmp 1 mt 2 ct 3 mstmp 7 m200ct 11 c200ct 12 m200mt 14 c200mt 15 }
+
+        # Pls uncomment following two lines for virial definition
+        set mtmp=mt
+        set ctmp=ct
+
+        # Pls uncomment following two lines for 200 critical density definition
+        #set mtmp=m200ct
+        #set ctmp=c200ct
+
+        # Pls uncomment following two lines for 200 mean density definition
+        #set mtmp=m200mt
+        #set ctmp=c200mt
+
+
+

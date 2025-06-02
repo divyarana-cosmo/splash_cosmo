@@ -1,0 +1,28 @@
+        WMAP05                     run (any 6-character string)
+        0.258  0.742               omegam0,omegaL0
+        1                          ispec
+        0.72                       h
+        0.796                      sigma8
+        0.963                      tilt
+        0.0438       2.726         omegab0,T_cmb (after version 1.03)
+        2                          ioutput
+        0.0                        zobs
+
+or
+
+        WMAP05                     run (any 6-character string)
+        0.258  0.742               omegam0,omegaL0
+        1                          ispec
+        0.72                       h
+        0.796                      sigma8
+        0.963                      tilt
+        0.0438       2.726         omegab0,T_cmb (after version 1.03)
+        1                          ioutput
+        0.0                        zobs
+        12.0                       lgMobs
+
+
+  This is a sample input file. One may find some more in file 'mandc.f'.
+
+
+ 
