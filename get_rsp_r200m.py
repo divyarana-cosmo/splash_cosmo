@@ -18,7 +18,7 @@ class constants():
       delta_crit = 1.686 # critical density spherical collapse
 
 class splashsim(constants):
-    def __init__(self, omg_de=0.7, wb=0.02225, wc=0.1198, ln1e10As=3.094, ns=0.9645, w=-1):
+    def __init__(self, omg_de=0.7, w=-1, wb=0.02225, wc=0.1198, ln1e10As=3.094, ns=0.9645):
         self.wb         = wb
         self.wc         = wc
         self.omg_de     = omg_de
@@ -73,7 +73,7 @@ class splashsim(constants):
         self.diff_xi3d  =   savgol_filter(np.log10(xihm), window_length=30, polyorder=3, deriv=1,delta=np.log10(self.rs_fine[1]/self.rs_fine[0])) #diff_xi3d
         self.logr       =   np.log10(self.rs_fine)
         func = interp1d(self.logr, self.diff_xi3d, kind='cubic')
-        res  = minimize(func, x0=0.0, bounds=((self.logr[0],None),(self.logr[-1],None)))
+        res  = minimize(func, x0=0.0, bounds=[(self.logr[0],self.logr[-1])])
         #xihm    =   10**(log_xihm)
         rsp     =   10**res.x[0]#rsp
         slope   =   res.fun#slope
@@ -87,6 +87,7 @@ def plot_rsp_vs_peak_height():
     from colossus.halo import splashback
 
     redshift = 0.0
+    plt.figure(figsize=(8,8))
     ax  = plt.subplot(3, 3, 1)
     ax1 = plt.subplot(3, 3, 2)
     ax2 = plt.subplot(3, 3, 3)
@@ -147,15 +148,15 @@ def plot_rsp_vs_peak_height():
     ax1.set_xscale('log')
     ax1.set_yscale('log')
     ax1.set_xlabel('$r$ [$h^{-1}$Mpc]')
-    ax1.set_ylabel(r'$\xi_{hm}(r)$')
+    ax1.set_ylabel(r'$\xi_{\rm hm}(r)$')
 
     ax2.set_xscale('log')
     ax2.set_xlabel('$r$ [$h^{-1}$Mpc]')
-    ax2.set_ylabel(r'$d\log \xi_{hm} / d \log r$')
+    ax2.set_ylabel(r'$d\log \xi_{\rm hm} / d \log r$')
     #ax3.set_xlabel(r'$\nu_{\rm 200m}$')
     #ax3.set_ylabel(r'$r_{\rm sp}/r_{\rm 200m}$')
     #ax3.legend(fontsize='small')
-    #plt.tight_layout()
+    plt.tight_layout()
     plt.savefig('rsp_vs_nu.png', dpi=300)
     plt.clf()
     return 0
@@ -164,7 +165,8 @@ def plot_rsp_vs_peak_height():
 def plot_rsp_vs_peak_height_varying_omega():
     redshift = 0.0
     #ax  = plt.subplot(2, 2, 1)
-    ax1 = plt.subplot(2, 2, 2)
+    #ax = plt.subplot(3, 3, 1)
+    ax1 = plt.subplot(3, 3, 4)
 
     omega_m_values = np.array([0.20,0.25,0.30,0.35,0.40])
     for mm,om in enumerate(omega_m_values):
@@ -192,27 +194,80 @@ def plot_rsp_vs_peak_height_varying_omega():
         nu_values       = np.array(nu_values)
         rsp_values      = np.array(rsp_values)
         r200m_values    = np.array(r200m_values)
-
-        ax1.plot(nu_values, rsp_values/r200m_values, '-', label=f'$\\Omega_m = {om:2.2f}$')
+        idx = (nu_values>2.0) & (nu_values<3.0)
+        #ax.plot(nu_values, rsp_values, '-',color='C%d'%mm)
+        ax1.plot(nu_values[idx], rsp_values[idx]/r200m_values[idx], '-', label=f'$\\Omega_m = {om:2.2f}$',color='C%d'%mm)
         #ax1.plot(nu_values, rsp_values/r200m_values, '-', label=f'$\\Omega_m = {om:2.2f},\sigma_8={sim.sigma8:2.2f}$')
 
     #ax.set_xscale('log')
     #ax.set_yscale('log')
-    #ax.set_xlabel("$R\,[h^{-1}\mathrm{Mpc}]$")
-    #ax.set_ylabel("$\Delta\Sigma(R)\,[h M_\odot \mathrm{pc}^{-2}]$")
-
+    #ax.set_xlabel(r'$\nu_{\rm 200m}$')
+    #ax.set_ylabel(r'$r_{\rm sp}$')
+    ax1.set_ylim(1.05, 1.25)
     ax1.set_xlabel(r'$\nu_{\rm 200m}$')
     ax1.set_ylabel(r'$r_{\rm sp}/r_{\rm 200m}$')
-    ax1.legend(fontsize='x-small')
-    plt.tight_layout()
+    ax1.legend(fontsize='xx-small')
+    #plt.tight_layout()
     plt.savefig('rsp_vs_nu_varying_omega.png', dpi=300)
+
+#def plot_rsp_vs_peak_height_varying_w():
+#    redshift = 0.0
+#    #ax  = plt.subplot(2, 2, 1)
+#    #ax = plt.subplot(3, 3, 1)
+#    ax1 = plt.subplot(3, 3, 4)
+#
+#    w_values = np.array([-1.2, -1.1, -1.0, -0.9, -0.8])
+#    for mm,ww in enumerate(w_values):
+#        om      = 0.3
+#        sim     = splashsim(omg_de=1-om, w=ww)
+#        rsp     = sim.logM200m2rsp(14.0, redshift)
+#        # plotting the delta sigma for each halo mass
+#        #ax.plot(sim.rs_fine, 10**sim.log_esd, '-', c='C%d'%mm, alpha=1.0)
+#
+#        logm_values = np.linspace(14.15, 15.0, 20)
+#        nu_values       = []
+#        rsp_values      = []
+#        r200m_values    = []
+#
+#        for nn,logm in enumerate(logm_values):
+#            # peak height
+#            nu          = sim.logM200m2nu(logm, redshift)
+#            nu_values.append(nu)
+#            # splashback radius
+#            rsp         = sim.logM200m2rsp(logm, redshift)
+#            rsp_values.append(rsp)
+#            # overdensity size assignment#
+#            r200m       = sim.M200m2r200m(logm)
+#            r200m_values.append(r200m)
+#
+#        nu_values       = np.array(nu_values)
+#        rsp_values      = np.array(rsp_values)
+#        r200m_values    = np.array(r200m_values)
+#
+#        idx = (nu_values>2.0) & (nu_values<3.0)
+#        #ax.plot(nu_values, rsp_values, '-',color='C%d'%mm)
+#        ax1.plot(nu_values[idx], rsp_values[idx]/r200m_values[idx], '-', label=f'$w = {ww:2.2f}$',color='C%d'%mm)
+#
+#        #ax1.plot(nu_values, rsp_values/r200m_values, '-', label=f'$\\Omega_m = {om:2.2f},\sigma_8={sim.sigma8:2.2f}$')
+#
+#    #ax.set_xscale('log')
+#    #ax.set_yscale('log')
+#    #ax.set_xlabel(r'$\nu_{\rm 200m}$')
+#    #ax.set_ylabel(r'$r_{\rm sp}$')
+#
+#    ax1.set_xlabel(r'$\nu_{\rm 200m}$')
+#    ax1.set_ylabel(r'$r_{\rm sp}/r_{\rm 200m}$')
+#    ax1.legend(fontsize='xx-small')
+#    #plt.tight_layout()
+#    plt.savefig('rsp_vs_nu_varying_w.png', dpi=300)
 
 
 
 
 if __name__ == "__main__":
-    plot_rsp_vs_peak_height()
+    #plot_rsp_vs_peak_height()
     plot_rsp_vs_peak_height_varying_omega()
+    #plot_rsp_vs_peak_height_varying_w()
         #def model(x,Log_Rho_s, Log_R_s, Log_Rho_0, S_e, Log_R_t):
         #    alpha       = 0.155 + 0.0095*nu**2
         #    R_out       =  5*r200m

@@ -6,7 +6,7 @@ from colossus.halo import mass_so, splashback
 import os
 
 def gamma_zhao09(omgm, sigma8, logmh):
-    fname   =  'cosmo_0.0'
+    fname   =  'cosmo_%s_%s'%(omgm, sigma8)
     h           =   0.70
     nspec       =   0.95
     Omega_b_h2  =   0.02298
@@ -40,6 +40,8 @@ def gamma_zhao09(omgm, sigma8, logmh):
     gamma  = (np.log10(Mz[5]) - np.log10(Mz[0]))/(np.log10(1+z[0]) - np.log10(1+z[5]))
     print('look here')
     os.system('rm mchistory*')
+    os.system('mkdir -p ./outputs/')
+    np.savetxt('outputs/res_%s'%fname,np.transpose([logmh, gamma]) )
     return gamma
 
 
@@ -73,6 +75,8 @@ def get_r200m(omgm, sigma8):
 
     # get the zhao09 gamma values
     gammazhao09 = gamma_zhao09(omgm, sigma8, np.log10(avg_mh))
+
+    #rsp     = get_rsp(r200m, omgm, gammazhao09)
 
     return  r200m, gamma, rsp, gammazhao09
 
@@ -116,15 +120,13 @@ plt.xlabel(r'$\Omega_{\rm m}$', fontsize=12)
 plt.colorbar(im, label=r'$\Gamma/\Gamma_{\rm zhao-09}$')
 
 
-
-
-
 plt.subplot(3,3,4)
 im = plt.imshow(rspmat.T, origin='lower', aspect='auto',
                 extent=[omgmarr[0], omgmarr[-1], sigma8arr[0], sigma8arr[-1]])
 plt.ylabel(r'$\sigma_8$', fontsize=12)
 plt.xlabel(r'$\Omega_{\rm m}$', fontsize=12)
-plt.colorbar(im, label=r'$r_{\rm sp}$')
+plt.colorbar(im, label=r'$r_{\rm sp}(\Gamma_{\rm Diemer+17})$')
+#plt.colorbar(im, label=r'$r_{\rm sp}(\Gamma_{\rm zhao09})$')
 
 
 plt.subplot(3,3,5)
