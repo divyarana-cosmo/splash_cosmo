@@ -4,10 +4,11 @@ from colossus.cosmology import cosmology
 from colossus.lss import mass_function, peaks
 from colossus.halo import mass_so, splashback
 import os
+from scipy.interpolate import UnivariateSpline as uvs
 
 def gamma_zhao09(omgm, sigma8, logmh):
     fname   =  'cosmo_%s_%s'%(omgm, sigma8)
-    if 0:
+    if 1:
         h           =   0.70
         nspec       =   0.95
         Omega_b_h2  =   0.02298
@@ -38,7 +39,9 @@ def gamma_zhao09(omgm, sigma8, logmh):
         data = np.loadtxt(flist[0], skiprows=1)
         z   = data[:,0]
         Mz  = data[:,1]
-        gamma  = (np.log10(Mz[5]) - np.log10(Mz[0]))/(np.log10(1+z[0]) - np.log10(1+z[5]))
+        func = uvs(z,Mz).derivative(1)
+        #gamma  = (np.log10(Mz[5]) - np.log10(Mz[0]))/(np.log10(1+z[0]) - np.log10(1+z[5]))
+        gamma   =   func(0.0)
         print('look here')
         os.system('rm mchistory*')
         os.system('mkdir -p ./outputs/')
