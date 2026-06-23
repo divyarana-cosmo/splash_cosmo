@@ -1,3 +1,5 @@
+# still needs to add the cosmological scaling for the cluster-galaxy x-correlation function
+
 import numpy as np
 import matplotlib.pyplot as plt
 from colossus.cosmology import cosmology
