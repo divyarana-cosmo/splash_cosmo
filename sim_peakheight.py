@@ -8,7 +8,6 @@ from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.integrate import quad
 from scipy.interpolate import InterpolatedUnivariateSpline as ius
 
-
 # Import the splash class from the provided DK14 model file
 from model_dk14 import splash
 
@@ -89,13 +88,14 @@ class splashsim():
         pi_scale = H_fid / H_tru
         pi_max_tru = pi_max_fid * pi_scale
 
-        # 1c. Amplitude scaling: f_crit = Sigma_crit_tru / Sigma_crit_fid
+        # 1c. Amplitude scaling: f_crit = Sigma_crit_fid / Sigma_crit_tru
         # we are working in the comoving coordinates
         # Sigma_crit is proportional to Dc_s / (Dc_l * (Dc_s - Dc_l))
         sigma_crit_tru = Dc_s_tru / (Dc_l_tru * (Dc_s_tru - Dc_l_tru))
         sigma_crit_fid = Dc_s_fid / (Dc_l_fid * (Dc_s_fid - Dc_l_fid))
 
-        f_crit = sigma_crit_tru / sigma_crit_fid
+        # FIXED: To map from True to Fiducial inferred surface density based on constant shear
+        f_crit = sigma_crit_fid / sigma_crit_tru
 
         # --- 2. Evaluate Theoretical Model in True Cosmology ---
         # Update splash params with the True pi_max (which maps to R_max in the dk14 code)
@@ -103,7 +103,6 @@ class splashsim():
         sp = splash(**splash_params)
 
         # Override the constants inside splash to perfectly match the true cosmology
-        # (Otherwise it uses the hardcoded H0=100, omg_m=0.315 from model_dk14.constants)
         sp.H0 = cosmo_tru.H0
         sp.omg_m = cosmo_tru.Om0
         sp.rho_crt = 3 * sp.H0**2 / (8 * np.pi * sp.G)
@@ -113,10 +112,13 @@ class splashsim():
         R_fine = np.logspace(np.log10(sp.spl_rmin), np.log10(R_max_grid), 500)
         log_R_fine = np.log10(R_fine)
 
+        # Note: sp.log_xi_2d divides by sp.R_max internally
         xi_2d_fine = 10**sp.log_xi_2d(log_R_fine)
         scaled_xi_2d = b_hm * xi_2d_fine
 
-        # Sigma in true physical/comoving units
+        # Sigma in true physical/comoving units.
+        # Multiplying by (2 * sp.R_max) explicitly cancels the 1/R_max inside log_xi_2d
+        # perfectly recovering the integral over dx without suppression artifacts.
         sigma_R_fine_tru = 2 * sp.R_max * sp.rho_m * scaled_xi_2d
 
         integral_fine = cumtrapz(R_fine * sigma_R_fine_tru, R_fine, initial=0)
@@ -144,7 +146,6 @@ if __name__ == "__main__":
     sim = splashsim()
 
     # Define True vs Fiducial Cosmologies
-    # e.g., Simulation cosmology vs WMAP9/Planck fiducial
     params_tru = {'flat': True, 'H0': 100.0, 'Om0': 0.300, 'Ob0': 0.049, 'sigma8': 0.81, 'ns': 0.95, 'Tcmb0': 2.726}
     params_fid = {'flat': True, 'H0': 100.0, 'Om0': 0.315, 'Ob0': 0.049, 'sigma8': 0.81, 'ns': 0.95, 'Tcmb0': 2.726}
 
@@ -193,12 +194,14 @@ if __name__ == "__main__":
 
     # Plotting
     plt.subplot(2,2,1)
-    plt.plot(R_fid_projected, ds_fid/1e12, label=f'$\Delta\Sigma_{{fid}}(R_{{fid}})$')
+    # Divided by 1e12 to convert output [h M_sun / Mpc^2] to [h M_sun / pc^2]
+    plt.plot(R_fid_projected, ds_fid/1e12, label=f'$\Delta\Sigma_{{fid}}(R_{{fid}})$', color='blue', lw=2)
     plt.xscale('log')
     plt.yscale('log')
     plt.xlabel(r'$R_{fid} \, [h^{-1}\mathrm{Mpc}]$', fontsize=14)
-    plt.ylabel(r'$\Delta\Sigma \, [h M_\odot / \mathrm{pc}^2]$ (Fiducial Frame)', fontsize=14)
-    plt.title('Cosmology-Scaled Weak Lensing Signal', fontsize=14)
+    plt.ylabel(r'$\Delta\Sigma \, [h M_\odot / \mathrm{pc}^2]$', fontsize=14)
+    plt.title('Cosmology-Scaled Weak Lensing Signal', fontsize=12)
     plt.legend(fontsize=12)
+    plt.grid(True, which="both", ls="--", alpha=0.5)
+    plt.tight_layout()
     plt.savefig("delta_sigma_scaled.png", dpi=300)
-
