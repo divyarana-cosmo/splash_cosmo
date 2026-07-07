@@ -59,7 +59,7 @@ def lnprior(x):
 
     if (0.1 < Om0 < 0.4 and 0.6 < sigma8 < 1.5 and -3 <= log_rho_s <= 5 and
         np.log10(0.1) <= log_r_s <= np.log10(5.0) and -1.5 <= log_rho_0 <= 1.5 and
-        0.1 <= s_e <= 4 and np.log10(0.5) <= log_r_t <= 0.2):
+        0.1 <= s_e <= 4 and np.log10(0.5) <= log_r_t <= 0.4):
 
         val = np.log(gauss(log_alpha, np.log10(0.2), 0.6) * gauss(log_beta, np.log10(6.0), 0.2) * gauss(log_gamma, np.log10(4.0), 0.2))
         return val
@@ -80,7 +80,7 @@ def lnprob(x, data, icov, R_bins_ds, R_bins_xicg):
 
     Delta = mod - data
     chisq = np.dot(Delta, np.dot(icov, Delta))
-
+    print(x,chisq)
     blob = np.append(mod, chisq)
     res = lp - chisq * 0.5
 
@@ -113,7 +113,7 @@ def runchain(Ntotal, sampler, chainf, blobf, pos, nwalkers):
 
 
 if __name__ == "__main__":
-    R_bins_ds, ds, ds_err = np.loadtxt('./mock_data/gen_esd.dat', unpack=1)
+    R_bins_ds, ds, ds_err       = np.loadtxt('./mock_data/gen_esd.dat', unpack=1)
     R_bins_xicg, xicg, xicg_err = np.loadtxt('./mock_data/gen_xicg2d.dat', unpack=1)
 
     data = np.concatenate([ds, xicg])
@@ -125,13 +125,15 @@ if __name__ == "__main__":
         pool.wait()
         sys.exit(0)
 
-    ndim = 10
-    nwalkers = 64
+    xtrue = np.array([
+    0.27, 0.81, 2.10782687, -0.46212836, -0.20334147, 
+    0.21067979, 0.98738642, 0.1939794, 0.84172758, 0.21323246])
+
+    ndim = len(xtrue)
+    nwalkers = 512
     np.random.seed(1996)
-
-    xtrue = np.array([0.27, 0.81, 2.10782687, -0.46212836, -0.20334147, 0.21067979, 0.98738642, 0.1939794, 0.84172758, 0.21323246])
-
-    p_0 = [xtrue + 0.05 * np.abs(xtrue) * np.random.randn(ndim) for _ in range(nwalkers)]
+    # Applies a Gaussian scatter with mean 0 and std dev 0.01 (1%)
+    p_0 = xtrue * (1 + np.random.normal(0.0, 1e-2, size=(nwalkers, ndim)))
 
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, pool=pool, args=[data, icov, R_bins_ds, R_bins_xicg])
 

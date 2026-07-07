@@ -6,7 +6,6 @@ from colossus.halo import mass_so, splashback
 from scipy.optimize import root_scalar
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.interpolate import InterpolatedUnivariateSpline as ius
-
 class SplashCosmology:
     """
     Decoupled Cosmological Mapping Engine.
@@ -164,6 +163,9 @@ class SplashCosmology:
 # TEST IMPLEMENTATION
 # ==========================================
 if __name__ == "__main__":
+    import sys
+    sys.path.append('/home/rana/github_0/splash_cosmo/')
+    from model_dk14 import splash
     # 1. Initialize once
     sim = SplashCosmology(Om0_fid=0.27, sigma8_fid=0.81, zl=0.4, zs=0.6, pi_max_fid=40)
 
@@ -173,12 +175,26 @@ if __name__ == "__main__":
 
     # 3. Emulate one MCMC step
     proposed_dk14 = {
-        'Log_Rho_s': 2.1078, 'Log_Alpha': -0.4621, 'Log_R_s': -0.2033,
-        'Log_Rho_0': 0.2106, 'S_e': 0.9873, 'Log_R_t': 0.1939,
-        'Log_Beta': 0.8417, 'Log_Gamma': 0.2132, 'F_cen': 1.0, 'R_off': 0.1
+        "Log_Rho_s": 2.1078,
+        "Log_Alpha": -0.4621,
+        "Log_R_s": -0.2033,
+        "Log_Rho_0": 0.2106,
+        "S_e": 0.9873,
+        "Log_R_t": 0.1939,
+        "Log_Beta": 0.8417,
+        "Log_Gamma": 0.2132,
+        "F_cen": 1.0,
+        "R_off": 0.1,
     }
+    
+    ss = splash(
+        **proposed_dk14,
+        R_max=40,
+        splrmin=0.1,
+        splrbin=60,
+    )
 
-    sim.update_mcmc_step(splash_params=proposed_dk14, Om0_tru=0.300, sigma8_tru=0.81)
+    sim.update_mcmc_step(splash_obj=ss, Om0_tru=0.300, sigma8_tru=0.81)
 
     # 4. Generate Signal
     if np.isnan(sim.r200m):
