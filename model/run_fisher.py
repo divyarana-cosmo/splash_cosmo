@@ -4,8 +4,7 @@ import sys
 import os
 
 # Import GetDist
-from getdist import plots
-from getdist.gaussian_mixtures import GaussianND
+from getdist import plots, MCSamples
 
 # Ensure paths match your MCMC implementation
 sys.path.append('/home/rana/github_0/splash_cosmo/')
@@ -19,13 +18,8 @@ z_l, z_s, pi_max_fid = 0.4, 0.6, 40.0
 sim = SplashCosmology(Om0_fid=0.27, sigma8_fid=0.81, zl=z_l, zs=z_s, pi_max_fid=pi_max_fid)
 
 def get_model_vector(theta, R_bins_ds, R_bins_xicg):
-    """
-    Evaluates the theoretical model by initializing Splash freshly,
-    then mapping it via the SplashCosmology engine. (Matches MCMC implementation)
-    """
     Om0, sigma8, log_rho_s, log_alpha, log_r_s, log_rho_0, s_e, log_r_t, log_beta, log_gamma = theta
-
-    # 1. Freshly initialize the base splash object to guarantee clean splines
+    
     ss = splash(
         Log_Rho_s=log_rho_s, Log_Alpha=log_alpha, Log_R_s=log_r_s,
         Log_Rho_0=log_rho_0, S_e=s_e, Log_R_t=log_r_t,
@@ -33,179 +27,173 @@ def get_model_vector(theta, R_bins_ds, R_bins_xicg):
         F_cen=1.0, R_off=0.1, R_max=pi_max_fid, splrmin=0.1, splrbin=60
     )
 
-    # 2. Pass the fresh object to the cosmology engine
     sim.update_mcmc_step(splash_obj=ss, Om0_tru=Om0, sigma8_tru=sigma8)
-
-    # Catch non-physical parameter spaces gracefully
+    
     if np.isnan(sim.r200m):
         return np.full(len(R_bins_ds) + len(R_bins_xicg), np.nan)
 
-    # Retrieve mapped observables
     ds_fid, xicg_fid = sim.get_esd_xicg(R_bins_ds, R_bins_xicg)
     return np.concatenate([ds_fid/1e12, xicg_fid]).flatten()
 
 
 def compute_fisher_matrix(theta_fiducial, step_sizes, icov, R_bins_ds, R_bins_xicg):
-    """
-    Computes the Fisher Matrix using a highly stable 5-point stencil
-    finite difference method to prevent truncation and floating point errors.
-    """
     N_params = len(theta_fiducial)
     mu_fid = get_model_vector(theta_fiducial, R_bins_ds, R_bins_xicg)
     N_data = len(mu_fid)
-
+    
     Jacobian = np.zeros((N_data, N_params))
-
+    
     print("Calculating robust numerical derivatives (5-point stencil)...")
     for i in range(N_params):
         h = step_sizes[i]
-
-        # Create parameter copies for the 4 evaluation points
-        theta_p2 = np.copy(theta_fiducial)
-        theta_p1 = np.copy(theta_fiducial)
-        theta_m1 = np.copy(theta_fiducial)
-        theta_m2 = np.copy(theta_fiducial)
-
-        # Apply steps (+2h, +1h, -1h, -2h)
+        
+        theta_p2, theta_p1 = np.copy(theta_fiducial), np.copy(theta_fiducial)
+        theta_m1, theta_m2 = np.copy(theta_fiducial), np.copy(theta_fiducial)
+        
         theta_p2[i] += 2 * h
         theta_p1[i] += h
         theta_m1[i] -= h
         theta_m2[i] -= 2 * h
-
-        # Evaluate model at all 4 points
+        
         mu_p2 = get_model_vector(theta_p2, R_bins_ds, R_bins_xicg)
         mu_p1 = get_model_vector(theta_p1, R_bins_ds, R_bins_xicg)
         mu_m1 = get_model_vector(theta_m1, R_bins_ds, R_bins_xicg)
         mu_m2 = get_model_vector(theta_m2, R_bins_ds, R_bins_xicg)
-
-        # 5-point stencil derivative formula
-        # f'(x) = (-f(x+2h) + 8f(x+h) - 8f(x-h) + f(x-2h)) / 12h
+        
         Jacobian[:, i] = (-mu_p2 + 8*mu_p1 - 8*mu_m1 + mu_m2) / (12.0 * h)
-
         print(f"  Derivative for parameter {i+1}/{N_params} completed.")
 
-    # F = J^T * icov * J
-    Fisher = Jacobian.T @ icov @ Jacobian
-    return Fisher
+    return Jacobian.T @ icov @ Jacobian
+
+
+def filter_samples(raw_samples, bounds):
+    """Filters Monte Carlo samples strictly against uniform bounds."""
+    mask = np.ones(len(raw_samples), dtype=bool)
+    for i, (lower, upper) in enumerate(bounds):
+        if lower is not None:
+            mask &= (raw_samples[:, i] >= lower)
+        if upper is not None:
+            mask &= (raw_samples[:, i] <= upper)
+    return raw_samples[mask]
 
 
 if __name__ == "__main__":
-    # ---------------------------------------------------------
-    # A. Data Loading & Setup
-    # ---------------------------------------------------------
     R_bins_ds, ds, ds_err = np.loadtxt('./mock_data/gen_esd.dat', unpack=1)
     R_bins_xicg, xicg, xicg_err = np.loadtxt('./mock_data/gen_xicg2d.dat', unpack=1)
 
     cov = np.diag(np.concatenate([ds_err**2/25, xicg_err**2/25]))
     icov = np.linalg.inv(cov)
 
-    xtrue = np.array([0.27, 0.81, 2.10782687, -0.46212836, -0.20334147,
+    xtrue = np.array([0.27, 0.81, 2.10782687, -0.46212836, -0.20334147, 
                       0.21067979, 0.98738642, 0.1939794, 0.84172758, 0.21323246])
-
-    # Dynamic fractional step sizes (2% for cosmo, 0.5% for shape)
+    
     fractional_steps = np.array([0.02, 0.02, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005])
     step_sizes = np.maximum(1e-5, fractional_steps * np.abs(xtrue))
-
+    
     param_names = ["Om0", "sigma8", "log_rho_s", "log_alpha", "log_r_s", "log_rho_0", "s_e", "log_r_t", "log_beta", "log_gamma"]
     param_labels = [r"$\Omega_m$", r"$\sigma_8$", r"$\log\rho_s$", r"$\log\alpha$", r"$\log r_s$", r"$\log\rho_0$", r"$s_e$", r"$\log r_t$", r"$\log\beta$", r"$\log\gamma$"]
 
-    # ---------------------------------------------------------
-    # B. Compute Base Data Fisher Matrix
-    # ---------------------------------------------------------
+    # Exact strict uniform bounds from mpi_mcmc_cosmo.py
+    param_bounds = [
+        (0.1, 0.4),                           # Om0 
+        (0.6, 1.5),                           # sigma8 
+        (-3.0, 5.0),                          # log_rho_s
+        (None, None),                         # log_alpha
+        (np.log10(0.1), np.log10(5.0)),       # log_r_s
+        (-1.5, 1.5),                          # log_rho_0
+        (0.1, 4.0),                           # s_e
+        (np.log10(0.5), 0.4),                 # log_r_t
+        (None, None),                         # log_beta
+        (None, None)                          # log_gamma
+    ]
+
+    # Compute Base Matrix
     F_data = compute_fisher_matrix(xtrue, step_sizes, icov, R_bins_ds, R_bins_xicg)
 
-    # ---------------------------------------------------------
-    # C. Apply DK14 Gaussian Priors (From MCMC)
-    # ---------------------------------------------------------
+    # 1. Apply DK14 Gaussian Priors
     F_dk14_priors = np.zeros_like(F_data)
+    F_dk14_priors[3, 3] = 1.0 / (0.6**2)  
+    F_dk14_priors[8, 8] = 1.0 / (0.2**2)  
+    F_dk14_priors[9, 9] = 1.0 / (0.2**2)  
+    
+    F_dk14_only = F_data + F_dk14_priors
 
-    # From lnprior: gauss(log_alpha, np.log10(0.2), 0.6) --> Index 3
-    #               gauss(log_beta, np.log10(6.0), 0.2)  --> Index 8
-    #               gauss(log_gamma, np.log10(4.0), 0.2) --> Index 9
-    F_dk14_priors[3, 3] = 1.0 / (0.6**2)
-    F_dk14_priors[8, 8] = 1.0 / (0.2**2)
-    F_dk14_priors[9, 9] = 1.0 / (0.2**2)
+    # 2. Add Correlated HSC 3x2pt Prior on Om0 and sigma8
+    # Using representative constraints for the HSC S8 degeneracy
+    sigma_Om0_hsc = 0.040
+    sigma_sigma8_hsc = 0.045
+    rho_hsc = -0.75 
 
-    F_data_with_shape = F_data + F_dk14_priors
-
-    # ---------------------------------------------------------
-    # D. Apply Correlated Planck 2018 Priors
-    # ---------------------------------------------------------
-    sigma_Om0_planck = 0.0073
-    sigma_sigma8_planck = 0.0060
-    rho_planck = -0.75
-
-    cov_prior_planck = np.array([
-        [sigma_Om0_planck**2, rho_planck * sigma_Om0_planck * sigma_sigma8_planck],
-        [rho_planck * sigma_Om0_planck * sigma_sigma8_planck, sigma_sigma8_planck**2]
+    cov_prior_hsc = np.array([
+        [sigma_Om0_hsc**2, rho_hsc * sigma_Om0_hsc * sigma_sigma8_hsc],
+        [rho_hsc * sigma_Om0_hsc * sigma_sigma8_hsc, sigma_sigma8_hsc**2]
     ])
+    
+    F_hsc = np.zeros_like(F_data)
+    F_hsc[0:2, 0:2] = np.linalg.inv(cov_prior_hsc) # Inject the inverted 2x2 block
 
-    F_planck = np.zeros_like(F_data)
-    F_planck[0:2, 0:2] = np.linalg.inv(cov_prior_planck)
+    F_dk14_and_hsc = F_dk14_only + F_hsc
 
-    F_total = F_data_with_shape + F_planck
-
-    # ---------------------------------------------------------
-    # E. Evaluate Constraints
-    # ---------------------------------------------------------
     try:
-        # 1. Base Data Only
-        cov_data = np.linalg.inv(F_data)
-        sigma_data = np.sqrt(np.diag(cov_data))
+        cov_dk14 = np.linalg.inv(F_dk14_only)
+        cov_hsc = np.linalg.inv(F_dk14_and_hsc)
+        
+        print("\nGenerating Monte Carlo samples to apply strict truncation...")
+        np.random.seed(42)
+        n_samples = 3000000
+        
+        # Sample & filter DK14-only
+        raw_dk14 = np.random.multivariate_normal(xtrue, cov_dk14, size=n_samples)
+        valid_dk14 = filter_samples(raw_dk14, param_bounds)
+        
+        # Sample & filter DK14 + HSC 3x2pt
+        raw_hsc = np.random.multivariate_normal(xtrue, cov_hsc, size=n_samples)
+        valid_hsc = filter_samples(raw_hsc, param_bounds)
+        
+        print(f"DK14 Only: Retained {len(valid_dk14)} samples out of {n_samples}.")
+        print(f"DK14 + HSC: Retained {len(valid_hsc)} samples out of {n_samples}.")
 
-        # 2. Data + DK14 Priors
-        cov_shape = np.linalg.inv(F_data_with_shape)
-        sigma_shape = np.sqrt(np.diag(cov_shape))
+        # Create GetDist objects
+        getdist_ranges = {name: bnd for name, bnd in zip(param_names, param_bounds) if bnd != (None, None)}
+        
+        samples_dk14 = MCSamples(samples=valid_dk14, names=param_names, labels=param_labels, label='Data + DK14', ranges=getdist_ranges)
+        samples_hsc = MCSamples(samples=valid_hsc, names=param_names, labels=param_labels, label='Data + DK14 + HSC 3x2pt', ranges=getdist_ranges)
+        
+        err_dk14 = np.sqrt(samples_dk14.getVars())
+        err_hsc = np.sqrt(samples_hsc.getVars())
 
-        # 3. Data + DK14 Priors + Planck
-        cov_tot = np.linalg.inv(F_total)
-        sigma_tot = np.sqrt(np.diag(cov_tot))
-
-        print("\n--- Fisher Forecast Constraints (1-sigma, Pre-Truncation) ---")
-        print(f"{'Parameter':>12} | {'True Val':>8} | {'Data Only':>12} | {'+ DK14 Priors':>15} | {'+ Planck':>12}")
-        print("-" * 70)
-        for name, val, err_d, err_s, err_t in zip(param_names, xtrue, sigma_data, sigma_shape, sigma_tot):
-            print(f"{name:>12} | {val:8.4f} | +/- {err_d:8.4f} | +/- {err_s:11.4f} | +/- {err_t:8.4f}")
-
+        print("\n--- True Synced Constraints (1-sigma, within Prior Volume) ---")
+        print(f"{'Parameter':>12} | {'True Val':>8} | {'DK14 Only':>15} | {'+ HSC 3x2pt':>15}")
+        print("-" * 61)
+        for name, val, e1, e2 in zip(param_names, xtrue, err_dk14, err_hsc):
+            print(f"{name:>12} | {val:8.4f} | +/- {e1:11.4f} | +/- {e2:11.4f}")
+            
     except np.linalg.LinAlgError:
         print("CRITICAL: Fisher Matrix is singular. Check step sizes or model gradients.")
         sys.exit()
 
     os.makedirs('./fits/', exist_ok=True)
 
-    # ---------------------------------------------------------
-    # F. GetDist Visualization with Hard Bounds Applied
-    # ---------------------------------------------------------
-    print("\nRendering GetDist Triangle Plot within prior volume...")
-
-    # Extract hard boundary uniform priors from mpi_mcmc_cosmo.py
-    prior_bounds = {
-        'Om0': [0.1, 0.4],
-        'sigma8': [0.6, 1.5],
-        'log_rho_s': [-3.0, 5.0],
-        'log_r_s': [np.log10(0.1), np.log10(5.0)],
-        'log_rho_0': [-1.5, 1.5],
-        's_e': [0.1, 4.0],
-        'log_r_t': [np.log10(0.5), 0.4]
-    }
-
-    # Initialize the Gaussians, explicitly passing the ranges argument
-    fisher_base = GaussianND(xtrue, cov_data, names=param_names, labels=param_labels, label='Data Only', ranges=prior_bounds)
-    fisher_shape = GaussianND(xtrue, cov_shape, names=param_names, labels=param_labels, label='+ DK14 Priors', ranges=prior_bounds)
-    fisher_all = GaussianND(xtrue, cov_tot, names=param_names, labels=param_labels, label='+ Planck', ranges=prior_bounds)
-
-    g = plots.get_subplot_plotter()
+    # Visualization
+    print("\nRendering GetDist Triangle Plot...")
+    
+    g = plots.get_subplot_plotter(width_inch=14)
+    g.settings.axes_fontsize = 12
+    g.settings.axes_labelsize = 16
+    g.settings.lab_fontsize = 20
+    g.settings.legend_fontsize = 20
+    g.settings.x_label_rotation = 45 
     g.settings.figure_legend_frame = False
     g.settings.alpha_filled_add = 0.5
 
-    # Plot to see how the contours shrink at each step
+    # Plot both sets of contours to see the constraint difference
     g.triangle_plot(
-        [fisher_base, fisher_shape, fisher_all],
-        filled=True,
-        contour_colors=['gray', 'blue', 'darkred'],
+        [samples_dk14], 
+        filled=True, 
+        contour_colors=['blue'],
         markers={name: val for name, val in zip(param_names, xtrue)}
     )
 
-    out_file = './fits/fisher_corner_with_all_priors.png'
+    out_file = './fits/fisher_corner_with_hsc.pdf'
     g.export(out_file)
-    print(f"Saved prior-overlay corner plot to {out_file}")
+    print(f"Saved comparative corner plot to {out_file}")
