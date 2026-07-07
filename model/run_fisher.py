@@ -7,9 +7,10 @@ import os
 from getdist import plots
 from getdist.gaussian_mixtures import GaussianND
 
-# Import your optimized SplashCosmology engine
-sys.path.append('/home/rana/github_0/splash_cosmo/model/')
+# Ensure paths match your MCMC implementation
+sys.path.append('/home/rana/github_0/splash_cosmo/')
 from sim_peakheight import SplashCosmology
+from model_dk14 import splash
 
 # ==========================================
 # 1. Initialize Engine Globally
@@ -18,21 +19,28 @@ z_l, z_s, pi_max_fid = 0.4, 0.6, 40.0
 sim = SplashCosmology(Om0_fid=0.27, sigma8_fid=0.81, zl=z_l, zs=z_s, pi_max_fid=pi_max_fid)
 
 def get_model_vector(theta, R_bins_ds, R_bins_xicg):
-    """Evaluates the model and returns the concatenated 1D data vector."""
+    """
+    Evaluates the theoretical model by initializing Splash freshly,
+    then mapping it via the SplashCosmology engine. (Matches MCMC implementation)
+    """
     Om0, sigma8, log_rho_s, log_alpha, log_r_s, log_rho_0, s_e, log_r_t, log_beta, log_gamma = theta
 
-    dk14_params = {
-        'Log_Rho_s': log_rho_s, 'Log_Alpha': log_alpha, 'Log_R_s': log_r_s,
-        'Log_Rho_0': log_rho_0, 'S_e': s_e, 'Log_R_t': log_r_t,
-        'Log_Beta': log_beta, 'Log_Gamma': log_gamma,
-        'F_cen': 1.0, 'R_off': 0.1
-    }
+    # 1. Freshly initialize the base splash object to guarantee clean splines
+    ss = splash(
+        Log_Rho_s=log_rho_s, Log_Alpha=log_alpha, Log_R_s=log_r_s,
+        Log_Rho_0=log_rho_0, S_e=s_e, Log_R_t=log_r_t,
+        Log_Beta=log_beta, Log_Gamma=log_gamma,
+        F_cen=1.0, R_off=0.1, R_max=pi_max_fid, splrmin=0.1, splrbin=60
+    )
 
-    sim.update_mcmc_step(splash_params=dk14_params, Om0_tru=Om0, sigma8_tru=sigma8)
+    # 2. Pass the fresh object to the cosmology engine
+    sim.update_mcmc_step(splash_obj=ss, Om0_tru=Om0, sigma8_tru=sigma8)
 
+    # Catch non-physical parameter spaces gracefully
     if np.isnan(sim.r200m):
         return np.full(len(R_bins_ds) + len(R_bins_xicg), np.nan)
 
+    # Retrieve mapped observables
     ds_fid, xicg_fid = sim.get_esd_xicg(R_bins_ds, R_bins_xicg)
     return np.concatenate([ds_fid/1e12, xicg_fid]).flatten()
 
@@ -88,11 +96,11 @@ if __name__ == "__main__":
     R_bins_ds, ds, ds_err = np.loadtxt('./mock_data/gen_esd.dat', unpack=1)
     R_bins_xicg, xicg, xicg_err = np.loadtxt('./mock_data/gen_xicg2d.dat', unpack=1)
 
-    # Note: Using your updated error downweighting factor (25 instead of 100)
     cov = np.diag(np.concatenate([ds_err**2/25, xicg_err**2/25]))
     icov = np.linalg.inv(cov)
 
-    xtrue = np.array([0.27, 0.81, 2.107, -0.462, -0.203, 0.210, 0.987, 0.193, 0.841, 0.213])
+    xtrue = np.array([0.27, 0.81, 2.10782687, -0.46212836, -0.20334147,
+                      0.21067979, 0.98738642, 0.1939794, 0.84172758, 0.21323246])
 
     # Dynamic fractional step sizes (2% for cosmo, 0.5% for shape)
     fractional_steps = np.array([0.02, 0.02, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005])
@@ -153,9 +161,6 @@ if __name__ == "__main__":
         cov_tot = np.linalg.inv(F_total)
         sigma_tot = np.sqrt(np.diag(cov_tot))
 
-        # Note: These printed 1-sigma errors are derived directly from the un-truncated
-        # matrices. If a Gaussian error extends beyond a prior bound, the true marginalized
-        # error within the prior volume would technically be smaller.
         print("\n--- Fisher Forecast Constraints (1-sigma, Pre-Truncation) ---")
         print(f"{'Parameter':>12} | {'True Val':>8} | {'Data Only':>12} | {'+ DK14 Priors':>15} | {'+ Planck':>12}")
         print("-" * 70)
@@ -172,11 +177,8 @@ if __name__ == "__main__":
     # F. GetDist Visualization with Hard Bounds Applied
     # ---------------------------------------------------------
     print("\nRendering GetDist Triangle Plot within prior volume...")
-    from getdist import plots
-    from getdist.gaussian_mixtures import GaussianND
 
     # Extract hard boundary uniform priors from mpi_mcmc_cosmo.py
-    # This prevents the GetDist contour plotting from extending into non-physical space
     prior_bounds = {
         'Om0': [0.1, 0.4],
         'sigma8': [0.6, 1.5],
